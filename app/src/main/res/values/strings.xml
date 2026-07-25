@@ -1,0 +1,43 @@
+<resources>
+    <string name="app_name">Mikasa Stickers</string>
+
+    <string name="create_pack">Crear pack</string>
+    <string name="add_sticker">Añadir sticker</string>
+    <string name="add_to_whatsapp">Añadir a WhatsApp</string>
+    <string name="edit">Editar</string>
+    <string name="sticker">Sticker</string>
+    <string name="tray_icon">Icono del pack</string>
+
+    <string name="empty_title">Aún no hay packs</string>
+    <string name="empty_subtitle">Pulsa \"Crear pack\" para empezar a convertir tus imágenes en stickers de WhatsApp.</string>
+
+    <string name="dialog_new_pack">Nuevo pack de stickers</string>
+    <string name="hint_pack_name">Nombre del pack</string>
+    <string name="hint_publisher">Autor / editor</string>
+    <string name="create">Crear</string>
+    <string name="cancel">Cancelar</string>
+    <string name="delete">Eliminar</string>
+    <string name="save">Guardar</string>
+
+    <string name="edit_pack">Editar pack</string>
+    <string name="delete_pack">Eliminar pack</string>
+    <string name="delete_pack_confirm">¿Seguro que quieres eliminar este pack y todos sus stickers?</string>
+    <string name="delete_sticker">Eliminar sticker</string>
+    <string name="delete_sticker_confirm">¿Eliminar este sticker del pack?</string>
+    <string name="set_as_tray">Usar como icono del pack</string>
+
+    <string name="need_min_stickers">Necesitas al menos 3 stickers para añadir el pack a WhatsApp.</string>
+    <string name="max_stickers_reached">Un pack admite un máximo de 30 stickers.</string>
+    <string name="status_ready">%1$d stickers · listo para WhatsApp</string>
+    <string name="status_need_more">%1$d/3 stickers · añade %2$d más</string>
+
+    <string name="whatsapp_not_installed">WhatsApp no está instalado en este dispositivo.</string>
+    <string name="added_to_whatsapp">Pack añadido a WhatsApp.</string>
+    <string name="already_added">Este pack ya está en WhatsApp.</string>
+    <string name="add_failed">No se pudo añadir el pack a WhatsApp.</string>
+    <string name="processing">Procesando imagen…</string>
+    <string name="image_error">No se pudo procesar la imagen seleccionada.</string>
+    <string name="name_required">Escribe un nombre para el pack.</string>
+    <string name="emojis_optional">Emojis (opcional, separados por espacios)</string>
+    <string name="edit_emojis">Editar emojis</string>
+</resources>
