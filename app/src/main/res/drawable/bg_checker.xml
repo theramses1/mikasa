@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple light-grey backdrop so transparent stickers stay visible. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/checker_dark" />
+    <corners android:radius="8dp" />
+</shape>
