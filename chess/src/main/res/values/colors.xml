@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#FF312E2B</color>
+    <color name="surface">#FF262421</color>
+    <color name="surface_pressed">#FF1E1C1A</color>
+    <color name="button_secondary">#FF454341</color>
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFBABABA</color>
+    <color name="accent">#FF81B64C</color>
+    <color name="accent_dark">#FF5D8F35</color>
+    <color name="launcher_bg">#FF769656</color>
+</resources>

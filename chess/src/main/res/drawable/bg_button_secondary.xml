@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#33FFFFFF">
+    <item>
+        <layer-list>
+            <item>
+                <shape>
+                    <solid android:color="@color/surface_pressed" />
+                    <corners android:radius="10dp" />
+                </shape>
+            </item>
+            <item android:bottom="4dp">
+                <shape>
+                    <solid android:color="@color/button_secondary" />
+                    <corners android:radius="10dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</ripple>

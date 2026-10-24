@@ -1,5 +1,8 @@
 # Mikasa Stickers
 
+> Este repositorio también contiene **Puzzles de Mate**, una app de puzzles de
+> ajedrez (encuentra el jaque mate): ver [`chess/README.md`](chess/README.md).
+
 App de Android para **crear stickers de WhatsApp** a partir de tus propias
 imágenes. Selecciona fotos de la galería, la app las convierte automáticamente
 al formato que exige WhatsApp (WebP 512×512 con fondo transparente) y las

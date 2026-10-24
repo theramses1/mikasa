@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Puzzles de Mate</string>
+    <string name="app_title">Puzzles de Mate</string>
+    <string name="app_tagline">Encuentra el jaque mate. Sin límite diario.</string>
+    <string name="your_rating">Tu rating de puzzles</string>
+    <string name="stats_format">Resueltos: %1$d · Racha: %2$d · Mejor racha: %3$d · Máximo: %4$d</string>
+    <string name="modes_header">Modos de juego</string>
+    <string name="reset">Reiniciar progreso</string>
+    <string name="reset_title">¿Reiniciar progreso?</string>
+    <string name="reset_message">Se borrarán tu rating, rachas y puzzles resueltos.</string>
+    <string name="reset_confirm">Reiniciar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="credits">Puzzles generados y verificados con Stockfish, más posiciones de partidas célebres.</string>
+
+    <string name="mode_rated">Puzzles</string>
+    <string name="mode_rated_desc">Con rating, se adaptan a tu nivel</string>
+    <string name="mode_mate1">Mate en 1</string>
+    <string name="mode_mate1_desc">Para calentar: una sola jugada</string>
+    <string name="mode_mate2">Mate en 2</string>
+    <string name="mode_mate2_desc">Jugada, respuesta del rival y mate</string>
+    <string name="mode_mate3">Mate en 3</string>
+    <string name="mode_mate3_desc">Combinaciones de tres jugadas</string>
+    <string name="mode_mate4">Mate en 4+</string>
+    <string name="mode_mate4_desc">Para expertos</string>
+    <string name="mode_famous">Partidas célebres</string>
+    <string name="mode_famous_desc">Remata como Morphy, Anderssen o Réti</string>
+    <string name="mode_review">Repasar fallados</string>
+    <string name="mode_review_desc">Vuelve a los puzzles que se te resistieron</string>
+
+    <string name="count_total">%d puzzles</string>
+    <string name="count_solved">%1$d/%2$d</string>
+    <string name="count_pending">%d pendientes</string>
+
+    <string name="back">Volver</string>
+    <string name="status_opponent">Tu rival mueve…</string>
+    <string name="white_to_move">Juegan las blancas</string>
+    <string name="black_to_move">Juegan las negras</string>
+    <string name="find_mate_in_1">Encuentra el mate en 1</string>
+    <string name="find_mate_in_n">Encuentra el mate en %d</string>
+    <string name="correct_title">¡Bien!</string>
+    <string name="correct_detail">Sigue, el rival responde…</string>
+    <string name="wrong_title">Incorrecto</string>
+    <string name="wrong_detail">Esa jugada no es la solución. Inténtalo otra vez.</string>
+    <string name="solved_title">¡Jaque mate!</string>
+    <string name="solved_detail">Puzzle resuelto</string>
+    <string name="completed_title">Puzzle completado</string>
+    <string name="completed_detail">Resuelto con ayuda. ¡A por el siguiente!</string>
+    <string name="hint_title">Pista</string>
+    <string name="hint_detail">Mueve la pieza resaltada en azul.</string>
+    <string name="solution_title">Solución</string>
+    <string name="solution_detail">Mira cómo se llega al mate.</string>
+    <string name="puzzle_info">Puzzle #%1$d · Dificultad %2$d · Mate en %3$d</string>
+
+    <string name="hint">Pista</string>
+    <string name="solution">Solución</string>
+    <string name="retry">Reintentar</string>
+    <string name="next">Siguiente</string>
+    <string name="skip">Saltar</string>
+
+    <string name="promotion_title">Coronar</string>
+    <string-array name="promotion_pieces">
+        <item>Dama</item>
+        <item>Torre</item>
+        <item>Alfil</item>
+        <item>Caballo</item>
+    </string-array>
+
+    <string name="no_puzzles">No hay puzzles en este modo.</string>
+    <string name="no_puzzles_left">¡No te quedan puzzles en este modo!</string>
+</resources>
