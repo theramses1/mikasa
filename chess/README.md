@@ -7,7 +7,7 @@ límite diario y sin conexión a internet.
 
 ## Características
 
-- **Más de mil puzzles** incluidos (mate en 1, 2, 3 y 4+), todos verificados
+- **704 puzzles** incluidos (mate en 1, 2, 3 y 4+), todos verificados
   con Stockfish: la solución es única en cada jugada y el rival responde con la
   defensa más resistente.
 - **Partidas célebres**: remates reales de Morphy (la partida de la Ópera),
