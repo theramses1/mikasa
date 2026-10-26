@@ -122,9 +122,9 @@ class UiTest {
         assertTrue(act.has("Check-in semanal disponible"))
         val expected = mapOf(
             MainActivity.Tab.DIET to "Resumen del día",
-            MainActivity.Tab.TRAIN to "Rutinas",
+            MainActivity.Tab.TRAIN to "+ Nueva rutina",
             MainActivity.Tab.WEIGHT to "Gasto energético vs ingesta",
-            MainActivity.Tab.JOURNAL to "Promedios 7 días",
+            MainActivity.Tab.JOURNAL to "Guardar bitácora",
             MainActivity.Tab.HOME to "Plan",
         )
         for ((tab, text) in expected) {

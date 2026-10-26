@@ -108,7 +108,10 @@ fun Context.horizontal(block: LinearLayout.() -> Unit = {}) = LinearLayout(this)
 }
 
 fun <T : View> ViewGroup.add(v: T, width: Int = ViewGroup.LayoutParams.MATCH_PARENT, height: Int = ViewGroup.LayoutParams.WRAP_CONTENT, weight: Float = 0f): T {
-    addView(v, LinearLayout.LayoutParams(width, height, weight))
+    // En una fila, ocupar todo el ancho dejaría sin espacio a los demás elementos.
+    val horizontalRow = this is LinearLayout && orientation == LinearLayout.HORIZONTAL
+    val w = if (horizontalRow && width == ViewGroup.LayoutParams.MATCH_PARENT) ViewGroup.LayoutParams.WRAP_CONTENT else width
+    addView(v, LinearLayout.LayoutParams(w, height, weight))
     return v
 }
 

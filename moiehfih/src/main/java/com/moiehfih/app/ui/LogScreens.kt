@@ -96,7 +96,7 @@ class WeightScreen(act: MainActivity) : Screen(act) {
         root.card {
             h3("Registros")
             if (entries.isEmpty()) muted("Sin registros en este rango.").margins(top = 6)
-            for (k in entries.take(40)) {
+            for (k in entries.take(21)) {
                 listRow(
                     "${Fmt.n(data.weights[k], 1)} kg",
                     Fmt.date(k),
@@ -105,7 +105,7 @@ class WeightScreen(act: MainActivity) : Screen(act) {
                     onClick = { entryDate = k; act.refresh(scrollTop = true) },
                 )
             }
-            if (entries.size > 40) muted("Mostrando los 40 más recientes de ${entries.size}.", 12f).margins(top = 6)
+            if (entries.size > 21) muted("Mostrando los 21 más recientes de ${entries.size}.", 12f).margins(top = 6)
         }
     }
 

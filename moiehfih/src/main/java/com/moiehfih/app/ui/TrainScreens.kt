@@ -79,7 +79,7 @@ fun LinearLayout.suggestionBox(s: Calc.Suggestion, prefix: String = "Sugerencia"
     add(context.vertical {
         background = rounded(Pal.surface2, context.dp(10).toFloat())
         setPadding(context.dp(10), context.dp(8), context.dp(10), context.dp(8))
-        val w = if (s.weight != null) "${Fmt.n(s.weight, 1)} kg" else "elige peso"
+        val w = if (s.weight != null) "${Fmt.plain(s.weight, 2)} kg" else "elige peso"
         text("$prefix: $w × ${s.reps} (${s.sets} series)", 14f, kindColor(s.kind), bold = true)
         text(s.reason, 13f, Pal.muted)
     }).margins(top = 6, bottom = 4)
@@ -271,13 +271,13 @@ class ActiveWorkoutScreen(act: MainActivity) : Screen(act) {
                 gravity = Gravity.CENTER
                 setTextColor(Pal.muted)
             }, width = 0, weight = 0.45f)
-            fun cell(value: String, kind: InputKind, weight: Float, hint: String = "", onChange: (String) -> Unit): EditText {
+            fun cell(value: String, kind: InputKind, weight: Float, hint: String = "", update: (String) -> Unit): EditText {
                 val e = ctx.input(value, hint, kind).apply {
                     gravity = Gravity.CENTER
                     setPadding(ctx.dp(4), ctx.dp(8), ctx.dp(4), ctx.dp(8))
                     if (set.done) background = rounded(Pal.soft(Pal.good, 45), ctx.dp(10).toFloat(), Pal.border, ctx.dp(1))
-                    onChange(onChange)
                 }
+                e.onChange(update)
                 r.add(e, width = 0, weight = weight).margins(end = 4)
                 return e
             }

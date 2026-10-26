@@ -212,8 +212,6 @@ class ProfileForm(root: LinearLayout, p: Profile?, g: Goal, withWeight: Boolean)
     private fun spinner(items: List<String>, selected: Int) = Spinner(ctx).apply {
         adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, items)
         setSelection(selected)
-        background = rounded(Pal.surface2, ctx.dp(10).toFloat(), Pal.border, ctx.dp(1))
-        setPadding(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
     }
 
     class Result(val profile: Profile, val goal: Goal, val weightKg: Double?)

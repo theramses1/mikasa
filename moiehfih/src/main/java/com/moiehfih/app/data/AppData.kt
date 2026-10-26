@@ -25,6 +25,7 @@ class AppData private constructor(context: Context) {
 
         /** Solo para pruebas: cada prueba usa una aplicación (y base de datos) nueva. */
         fun resetForTests() {
+            instance?.db?.close()
             instance = null
         }
     }
