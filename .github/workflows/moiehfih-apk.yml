@@ -4,7 +4,6 @@ on:
   push:
     paths:
       - 'moiehfih/**'
-      - 'moiehfih-android/**'
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/moiehfih-apk.yml'
@@ -26,10 +25,6 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Pruebas de la app web
-        working-directory: moiehfih
-        run: node --test tests/*.test.mjs
-
       - name: Preparar llave de firma (opcional)
         env:
           KEYSTORE_BASE64: ${{ secrets.MOIEHFIH_KEYSTORE_BASE64 }}
@@ -41,29 +36,79 @@ jobs:
             echo "::warning::Sin secreto MOIEHFIH_KEYSTORE_BASE64: el APK se firma con una llave de depuración temporal."
           fi
 
-      - name: Compilar APK
+      - name: Pruebas y compilación
         env:
           MOIEHFIH_KEYSTORE_PASSWORD: ${{ secrets.MOIEHFIH_KEYSTORE_PASSWORD }}
           MOIEHFIH_KEY_ALIAS: ${{ secrets.MOIEHFIH_KEY_ALIAS }}
           MOIEHFIH_KEY_PASSWORD: ${{ secrets.MOIEHFIH_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew :moiehfih-android:assembleRelease -PversionCode=${{ github.run_number }} --stacktrace
-          cp moiehfih-android/build/outputs/apk/release/moiehfih-android-release.apk MoiehFih.apk
+          ./gradlew :moiehfih:testDebugUnitTest :moiehfih:assembleDebug :moiehfih:assembleRelease \
+            -PversionCode=${{ github.run_number }} --stacktrace
+          mkdir -p apks
+          cp moiehfih/build/outputs/apk/release/moiehfih-release.apk apks/MoiehFih.apk
+          cp moiehfih/build/outputs/apk/debug/moiehfih-debug.apk apks/MoiehFih-debug.apk
+
+      - name: Resultados de pruebas
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: moiehfih/build/reports/tests/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MoiehFih-apk
-          path: MoiehFih.apk
+          name: moiehfih-apks
+          path: apks/
 
-      - name: Publicar release
-        uses: softprops/action-gh-release@v2
+  emulator:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: moiehfih-apks
+          path: apks
+
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Probar en emulador (Android 14)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash moiehfih/tools/emulator-smoke.sh apks/MoiehFih-debug.apk screenshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas
+          path: screenshots/
+
+  release:
+    needs: [build, emulator]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: moiehfih-apks
+          path: apks
+
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: moiehfih-v1.0.${{ github.run_number }}
           name: MoiehFih 1.0.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           make_latest: true
-          files: MoiehFih.apk
+          files: apks/MoiehFih.apk
           body: |
-            APK de MoiehFih (dieta, macros, peso, entrenos y bitácora).
-            Descárgalo en tu Android y ábrelo para instalar (permite "instalar apps de origen desconocido").
+            MoiehFih: dieta, macros, peso corporal, entrenamientos con progresión de cargas y bitácora.
+            Descarga MoiehFih.apk en tu Android y ábrelo para instalar (permite "instalar apps de origen desconocido").

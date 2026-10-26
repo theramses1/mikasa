@@ -1,0 +1,60 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.moiehfih.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.moiehfih.app"
+        minSdk 26
+        targetSdk 34
+        // CI pasa -PversionCode=<número de ejecución> para que cada APK actualice al anterior.
+        def code = Integer.parseInt(String.valueOf(project.findProperty('versionCode') ?: '1'))
+        versionCode code
+        versionName "1.0.${code}"
+    }
+
+    // Firma de release: si existen las variables MOIEHFIH_KEYSTORE* (secretos de CI) se usa esa
+    // llave, así cada APK nuevo se instala encima del anterior. Si no, la llave de depuración.
+    def keystorePath = System.getenv('MOIEHFIH_KEYSTORE')
+    signingConfigs {
+        if (keystorePath) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv('MOIEHFIH_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('MOIEHFIH_KEY_ALIAS')
+                keyPassword System.getenv('MOIEHFIH_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystorePath ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+}
+
+// Sin AndroidX: la app solo usa el framework de Android, así también se puede
+// compilar sin Gradle con build-apk.sh.
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.13'
+}
