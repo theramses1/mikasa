@@ -1,5 +1,5 @@
 // Cachea la app para que funcione sin conexión. Sube VERSION al cambiar archivos.
-const VERSION = 'mikasa-fit-v1';
+const VERSION = 'moiehfih-v1';
 const FILES = ['./', './index.html', './styles.css', './manifest.webmanifest', './icon.svg', './js/app.js', './js/calc.js', './js/charts.js', './js/data.js', './js/store.js'];
 
 self.addEventListener('install', (e) => {

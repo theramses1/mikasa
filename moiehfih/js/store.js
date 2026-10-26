@@ -2,7 +2,8 @@
 import { seedFoods, seedExercises, seedRoutines } from './data.js';
 import { addDays, ymd, round, scaleFood, MEALS } from './calc.js';
 
-const KEY = 'mikasa-fit-v1';
+const KEY = 'moiehfih-v1';
+const OLD_KEY = 'mikasa-fit-v1'; // nombre anterior de la app
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -37,7 +38,7 @@ function migrate(s) {
 
 export function load() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY);
     if (raw) return migrate(JSON.parse(raw));
   } catch (e) {
     console.error('No se pudieron leer los datos guardados', e);

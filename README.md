@@ -1,6 +1,6 @@
 # Mikasa Stickers
 
-> Este repositorio también incluye **[Mikasa Fit](fitness/README.md)**, una app
+> Este repositorio también incluye **[MoiehFih](moiehfih/README.md)**, una app
 > (PWA) de dieta, macros, peso corporal, entrenamientos y bitácora.
 
 App de Android para **crear stickers de WhatsApp** a partir de tus propias

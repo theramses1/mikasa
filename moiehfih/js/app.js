@@ -97,7 +97,7 @@ function goalLabel(rate) {
 
 // ---------- Render principal ----------
 
-const TITLES = { inicio: 'Mikasa Fit', dieta: 'Dieta', entreno: 'Entreno', peso: 'Peso corporal', bitacora: 'Bitácora', ajustes: 'Ajustes' };
+const TITLES = { inicio: 'MoiehFih', dieta: 'Dieta', entreno: 'Entreno', peso: 'Peso corporal', bitacora: 'Bitácora', ajustes: 'Ajustes' };
 
 function render() {
   const view = $('#view');
@@ -1005,10 +1005,13 @@ const actions = {
     scrollTo(0, 0);
   },
   export() {
+    const name = `moiehfih-${today()}.json`;
+    // En la app de Android el WebView no descarga blobs: se guarda vía el puente nativo.
+    if (window.MoiehFihAndroid) return window.MoiehFihAndroid.saveFile(name, exportJson(S));
     const blob = new Blob([exportJson(S)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `mikasa-fit-${today()}.json`;
+    a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
@@ -1214,6 +1217,6 @@ const initial = location.hash.slice(1);
 if (TITLES[initial]) ui.tab = initial;
 render();
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.MoiehFihAndroid) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

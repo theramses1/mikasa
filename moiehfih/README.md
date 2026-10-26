@@ -1,4 +1,4 @@
-# Mikasa Fit
+# MoiehFih
 
 App (PWA) para registrar **dieta, macros, peso corporal, entrenamientos y bitácora
 diaria**, inspirada en MacroFactor: estima tu gasto energético real a partir de
@@ -34,22 +34,43 @@ guarda todo en el dispositivo (sin cuentas ni servidores).
   rep; dos sesiones seguidas por debajo del mínimo con el mismo peso → descarga
   del 10 %.
 
+## App de Android (APK)
+
+El módulo [`moiehfih-android/`](../moiehfih-android) empaqueta esta carpeta en un
+WebView. GitHub Actions ([`moiehfih-apk.yml`](../.github/workflows/moiehfih-apk.yml))
+compila el APK en cada cambio y lo publica en **Releases**:
+
+https://github.com/theramses1/mikasa/releases/latest/download/MoiehFih.apk
+
+Sin configurar nada, cada APK se firma con una llave de depuración distinta, así que
+para actualizar hay que desinstalar la versión anterior (y se pierden los datos:
+exporta una copia antes). Para que las actualizaciones se instalen encima, crea una
+llave y guárdala en los secretos del repositorio (Settings → Secrets → Actions):
+
+```bash
+keytool -genkeypair -keystore moiehfih.keystore -alias moiehfih -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 moiehfih.keystore   # valor de MOIEHFIH_KEYSTORE_BASE64
+```
+
+Secretos: `MOIEHFIH_KEYSTORE_BASE64`, `MOIEHFIH_KEYSTORE_PASSWORD`,
+`MOIEHFIH_KEY_ALIAS` y `MOIEHFIH_KEY_PASSWORD`.
+
 ## Uso
 
 ```bash
-cd fitness
+cd moiehfih
 python3 -m http.server 8080   # abre http://localhost:8080
 npm test                      # pruebas de los cálculos (node --test)
 ```
 
-Para usarla en el móvil, publica la carpeta `fitness/` en cualquier hosting
+Para usarla en el móvil, publica la carpeta `moiehfih/` en cualquier hosting
 estático con HTTPS (por ejemplo GitHub Pages), ábrela en el navegador y elige
 «Instalar app» o «Añadir a pantalla de inicio».
 
 ## Estructura
 
 ```
-fitness/
+moiehfih/
 ├── index.html, styles.css, manifest.webmanifest, sw.js, icon.svg
 ├── js/
 │   ├── app.js      # vistas y eventos
