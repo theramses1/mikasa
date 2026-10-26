@@ -1,5 +1,8 @@
 # Mikasa Stickers
 
+> Este repositorio también incluye **[Mikasa Fit](fitness/README.md)**, una app
+> (PWA) de dieta, macros, peso corporal, entrenamientos y bitácora.
+
 App de Android para **crear stickers de WhatsApp** a partir de tus propias
 imágenes. Selecciona fotos de la galería, la app las convierte automáticamente
 al formato que exige WhatsApp (WebP 512×512 con fondo transparente) y las
