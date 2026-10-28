@@ -113,7 +113,10 @@ fun <T : View> ViewGroup.add(v: T, width: Int = ViewGroup.LayoutParams.MATCH_PAR
     // En una fila, ocupar todo el ancho dejaría sin espacio a los demás elementos.
     val horizontalRow = this is LinearLayout && orientation == LinearLayout.HORIZONTAL
     val w = if (horizontalRow && width == ViewGroup.LayoutParams.MATCH_PARENT) ViewGroup.LayoutParams.WRAP_CONTENT else width
-    addView(v, LinearLayout.LayoutParams(w, height, weight))
+    // Una View vacía con alto WRAP_CONTENT ocupa todo el alto disponible: cuando la pantalla tiene
+    // poco contenido, un separador así estiraba su fila y empujaba lo demás fuera de la vista.
+    val h = if (v.javaClass == View::class.java && height == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else height
+    addView(v, LinearLayout.LayoutParams(w, h, weight))
     return v
 }
 

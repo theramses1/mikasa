@@ -450,4 +450,33 @@ class UiTest {
         data.addWater(today, 300)
         assertEquals(300, data.waterTotal(today))
     }
+
+    /** Regresión: al escribir la segunda letra, la búsqueda y la lista desaparecían de la vista. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w390dp-h844dp-xxhdpi") // pantalla de teléfono real: el error solo se ve con lista corta
+    fun foodSearchStaysVisibleWhileTyping() {
+        setupProfile()
+        val act = launch()
+        act.push(FoodSearchScreen(act, today, Meal.DESAYUNO))
+        idle()
+        val search = act.all().filterIsInstance<EditText>().single()
+        for (letter in "lec") {
+            search.text.append(letter)
+            idle()
+            val root = act.window.decorView
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec(root.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(root.height, View.MeasureSpec.EXACTLY),
+            )
+            root.layout(0, 0, root.width, root.height)
+            val loc = IntArray(2)
+            search.getLocationInWindow(loc)
+            assertTrue("La búsqueda se movió a y=${loc[1]} con «${search.text}»", loc[1] in 0..root.height / 3)
+            // La lista empieza justo debajo de la búsqueda.
+            val firstRow = act.all().filterIsInstance<TextView>().first { it.text.startsWith("100 ") }
+            firstRow.getLocationInWindow(loc)
+            assertTrue("La lista quedó fuera de la vista (y=${loc[1]}) con «${search.text}»", loc[1] in 0 until root.height)
+        }
+        assertTrue(act.has("Leche descremada"))
+    }
 }
