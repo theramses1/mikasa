@@ -40,6 +40,14 @@ class AppData private constructor(context: Context) {
         private set
     var restSeconds = 120
         private set
+    /** Meta de agua elegida por el usuario (ml); null = automática según el peso. */
+    var waterGoalOverride: Int? = null
+        private set
+    /** Health Connect: si el usuario lo conectó y cuándo se sincronizó por última vez (epoch ms). */
+    var healthConnected = false
+        private set
+    var healthLastSync: Long? = null
+        private set
 
     val foods = ArrayList<Food>()
     val entries = HashMap<LocalDate, MutableList<FoodEntry>>()
@@ -49,6 +57,9 @@ class AppData private constructor(context: Context) {
     val workouts = ArrayList<Workout>()
     val journal = HashMap<LocalDate, JournalEntry>()
     val checkins = ArrayList<Checkin>()
+    val water = HashMap<LocalDate, MutableList<WaterEntry>>()
+    val cardio = ArrayList<CardioSession>()
+    val health = java.util.TreeMap<LocalDate, HealthDay>()
 
     /** Cambia con cada modificación; sirve para invalidar cálculos derivados. */
     var version = 0
@@ -154,6 +165,19 @@ class AppData private constructor(context: Context) {
         putKv("restSeconds", JSONObject().put("v", s))
     }
 
+    fun setWaterGoal(ml: Int?) {
+        waterGoalOverride = ml
+        putKv("waterGoal", JSONObject().put("v", ml ?: JSONObject.NULL))
+        changed()
+    }
+
+    fun setHealthState(connected: Boolean, lastSync: Long?) {
+        healthConnected = connected
+        healthLastSync = lastSync
+        putKv("health", JSONObject().put("connected", connected).put("lastSync", lastSync ?: JSONObject.NULL))
+        changed()
+    }
+
     private fun putKv(key: String, value: JSONObject) {
         db.insertWithOnConflict("kv", null, ContentValues().apply {
             put("key", key); put("value", value.toString())
@@ -179,6 +203,7 @@ class AppData private constructor(context: Context) {
         val values = ContentValues().apply {
             put("date", e.date.toString()); put("meal", e.meal.name); put("food_id", e.foodId); put("name", e.name)
             put("grams", e.grams); put("kcal", e.macros.kcal); put("p", e.macros.p); put("c", e.macros.c); put("f", e.macros.f)
+            put("sugar", e.macros.sugar); put("unit", e.unit.name)
         }
         val saved = if (e.id > 0) {
             db.update("food_entries", values, "id=?", arrayOf("${e.id}"))
@@ -302,6 +327,72 @@ class AppData private constructor(context: Context) {
         changed()
     }
 
+    // ---------- Agua ----------
+
+    fun waterGoal(): Int = waterGoalOverride ?: Calc.waterGoalMl(derived().trendNow)
+
+    fun waterTotal(date: LocalDate): Int = water[date].orEmpty().sumOf { it.ml }
+
+    fun addWater(date: LocalDate, ml: Int): WaterEntry {
+        val time = System.currentTimeMillis()
+        val id = db.insert("water", null, ContentValues().apply {
+            put("date", date.toString()); put("ml", ml); put("time", time)
+        })
+        val e = WaterEntry(id, date, ml, time)
+        water.getOrPut(date) { ArrayList() } += e
+        changed()
+        return e
+    }
+
+    fun deleteWater(e: WaterEntry) {
+        db.delete("water", "id=?", arrayOf("${e.id}"))
+        water[e.date]?.removeAll { it.id == e.id }
+        if (water[e.date]?.isEmpty() == true) water.remove(e.date)
+        changed()
+    }
+
+    // ---------- Cardio ----------
+
+    fun saveCardio(c: CardioSession): CardioSession {
+        val values = ContentValues().apply {
+            put("date", c.date.toString()); put("type", c.type.name); put("minutes", c.minutes); put("distance_km", c.distanceKm)
+            put("kcal", c.kcal); put("avg_hr", c.avgHr); put("notes", c.notes); put("external_id", c.externalId)
+        }
+        val saved = if (c.id > 0) {
+            db.update("cardio", values, "id=?", arrayOf("${c.id}")); c
+        } else {
+            c.copy(id = db.insert("cardio", null, values))
+        }
+        val i = cardio.indexOfFirst { it.id == saved.id }
+        if (i >= 0) cardio[i] = saved else cardio += saved
+        changed()
+        return saved
+    }
+
+    fun deleteCardio(id: Long) {
+        db.delete("cardio", "id=?", arrayOf("$id"))
+        cardio.removeAll { it.id == id }
+        changed()
+    }
+
+    /** Guarda una sesión importada; si ya existía (mismo id externo) la actualiza. */
+    fun upsertImportedCardio(c: CardioSession) {
+        val existing = cardio.firstOrNull { it.externalId != null && it.externalId == c.externalId }
+        saveCardio(c.copy(id = existing?.id ?: 0, notes = existing?.notes ?: c.notes))
+    }
+
+    // ---------- Health Connect ----------
+
+    fun saveHealthDay(h: HealthDay) {
+        db.insertWithOnConflict("health_days", null, ContentValues().apply {
+            put("date", h.date.toString()); put("steps", h.steps); put("active_kcal", h.activeKcal); put("distance_m", h.distanceM)
+            put("hr_avg", h.hrAvg); put("hr_min", h.hrMin); put("hr_max", h.hrMax); put("resting_hr", h.restingHr)
+            put("sleep_min", h.sleepMin); put("spo2", h.spo2); put("bp_sys", h.bpSys); put("bp_dia", h.bpDia); put("weight", h.weightKg)
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+        health[h.date] = h
+        changed()
+    }
+
     // ---------- Bitácora ----------
 
     fun saveJournal(j: JournalEntry) {
@@ -321,7 +412,7 @@ class AppData private constructor(context: Context) {
     // ---------- Copia de seguridad ----------
 
     fun exportJson(): String {
-        val root = JSONObject().put("app", "MoiehFih").put("version", 1)
+        val root = JSONObject().put("app", "MoiehFih").put("version", 2)
         for (table in Helper.TABLES) {
             val rows = JSONArray()
             db.rawQuery("SELECT * FROM $table", null).use { c ->
@@ -368,6 +459,8 @@ class AppData private constructor(context: Context) {
                     db.insertOrThrow(table, null, values)
                 }
             }
+            // Copias de la versión 1: completar azúcares y unidades.
+            if (root.optInt("version", 1) < 2) Helper.migrateDataTo2(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -406,6 +499,8 @@ class AppData private constructor(context: Context) {
 
     private fun loadAll() {
         profile = null; goal = Goal(); targets = null; restSeconds = 120
+        waterGoalOverride = null; healthConnected = false; healthLastSync = null
+        water.clear(); cardio.clear(); health.clear()
         foods.clear(); entries.clear(); weights.clear(); exercises.clear()
         routines.clear(); workouts.clear(); journal.clear(); checkins.clear()
 
@@ -424,21 +519,47 @@ class AppData private constructor(context: Context) {
                     o.getBoolean("manual"),
                 )
                 "restSeconds" -> restSeconds = o.getInt("v")
+                "waterGoal" -> waterGoalOverride = if (o.isNull("v")) null else o.getInt("v")
+                "health" -> {
+                    healthConnected = o.optBoolean("connected")
+                    healthLastSync = if (o.isNull("lastSync")) null else o.getLong("lastSync")
+                }
             }
         }
-        query("SELECT id, name, kcal, p, c, f, serving_g, serving_name, builtin FROM foods WHERE deleted=0 ORDER BY name") { c ->
+        query("SELECT id, name, kcal, p, c, f, serving_g, serving_name, builtin, sugar, unit FROM foods WHERE deleted=0 ORDER BY name") { c ->
             foods += Food(
-                c.getLong(0), c.getString(1), Macros(c.getDouble(2), c.getDouble(3), c.getDouble(4), c.getDouble(5)),
-                c.getDouble(6), c.getString(7), c.getInt(8) == 1,
+                c.getLong(0), c.getString(1), Macros(c.getDouble(2), c.getDouble(3), c.getDouble(4), c.getDouble(5), c.getDouble(9)),
+                c.getDouble(6), c.getString(7), c.getInt(8) == 1, unitOf(c.getString(10)),
             )
         }
-        query("SELECT id, date, meal, food_id, name, grams, kcal, p, c, f FROM food_entries ORDER BY id") { c ->
+        query("SELECT id, date, meal, food_id, name, grams, kcal, p, c, f, sugar, unit FROM food_entries ORDER BY id") { c ->
             val e = FoodEntry(
                 c.getLong(0), LocalDate.parse(c.getString(1)), Meal.valueOf(c.getString(2)),
                 if (c.isNull(3)) null else c.getLong(3), c.getString(4), if (c.isNull(5)) null else c.getDouble(5),
-                Macros(c.getDouble(6), c.getDouble(7), c.getDouble(8), c.getDouble(9)),
+                Macros(c.getDouble(6), c.getDouble(7), c.getDouble(8), c.getDouble(9), c.getDouble(10)), unitOf(c.getString(11)),
             )
             entries.getOrPut(e.date) { ArrayList() } += e
+        }
+        query("SELECT id, date, ml, time FROM water ORDER BY time") { c ->
+            val e = WaterEntry(c.getLong(0), LocalDate.parse(c.getString(1)), c.getInt(2), c.getLong(3))
+            water.getOrPut(e.date) { ArrayList() } += e
+        }
+        query("SELECT id, date, type, minutes, distance_km, kcal, avg_hr, notes, external_id FROM cardio ORDER BY date, id") { c ->
+            cardio += CardioSession(
+                c.getLong(0), LocalDate.parse(c.getString(1)),
+                CardioType.values().firstOrNull { it.name == c.getString(2) } ?: CardioType.OTRO, c.getInt(3),
+                if (c.isNull(4)) null else c.getDouble(4), if (c.isNull(5)) null else c.getDouble(5),
+                if (c.isNull(6)) null else c.getInt(6), c.getString(7) ?: "", c.getString(8),
+            )
+        }
+        query(
+            "SELECT date, steps, active_kcal, distance_m, hr_avg, hr_min, hr_max, resting_hr, sleep_min, spo2, bp_sys, bp_dia, weight " +
+                "FROM health_days",
+        ) { c ->
+            fun l(i: Int) = if (c.isNull(i)) null else c.getLong(i)
+            fun d(i: Int) = if (c.isNull(i)) null else c.getDouble(i)
+            val date = LocalDate.parse(c.getString(0))
+            health[date] = HealthDay(date, l(1), d(2), d(3), l(4), l(5), l(6), l(7), l(8), d(9), d(10), d(11), d(12))
         }
         query("SELECT date, kg FROM weights") { c -> weights[LocalDate.parse(c.getString(0))] = c.getDouble(1) }
         query("SELECT id, name, muscle, rep_min, rep_max, increment, builtin FROM exercises WHERE deleted=0 ORDER BY name") { c ->
@@ -502,24 +623,24 @@ class AppData private constructor(context: Context) {
         })
     }
 
-    private fun foodValues(f: Food) = ContentValues().apply {
-        put("name", f.name); put("kcal", f.per100.kcal); put("p", f.per100.p); put("c", f.per100.c); put("f", f.per100.f)
-        put("serving_g", f.servingG); put("serving_name", f.servingName); put("builtin", if (f.builtin) 1 else 0)
-    }
+    private fun unitOf(s: String?) = if (s == FoodUnit.ML.name) FoodUnit.ML else FoodUnit.G
 
-    private class Helper(context: Context) : SQLiteOpenHelper(context, "moiehfih.db", null, 1) {
+    private fun foodValues(f: Food) = Helper.foodValues(f)
+
+    private class Helper(context: Context) : SQLiteOpenHelper(context, "moiehfih.db", null, 2) {
         companion object {
             val TABLES = listOf(
                 "kv", "foods", "food_entries", "weights", "exercises", "routines", "workouts", "journal", "checkins",
+                "water", "cardio", "health_days",
             )
 
+            fun foodValues(f: Food) = ContentValues().apply {
+                put("name", f.name); put("kcal", f.per100.kcal); put("p", f.per100.p); put("c", f.per100.c); put("f", f.per100.f)
+                put("sugar", f.per100.sugar); put("unit", f.unit.name)
+                put("serving_g", f.servingG); put("serving_name", f.servingName); put("builtin", if (f.builtin) 1 else 0)
+            }
+
             fun seed(db: SQLiteDatabase) {
-                val foodValues = { f: Food ->
-                    ContentValues().apply {
-                        put("name", f.name); put("kcal", f.per100.kcal); put("p", f.per100.p); put("c", f.per100.c)
-                        put("f", f.per100.f); put("serving_g", f.servingG); put("serving_name", f.servingName); put("builtin", 1)
-                    }
-                }
                 Seed.foods.forEach { db.insert("foods", null, foodValues(it)) }
                 val ids = HashMap<String, Long>()
                 for (e in Seed.exercises) {
@@ -534,40 +655,87 @@ class AppData private constructor(context: Context) {
                     })
                 }
             }
+
+            /** Esquema de la versión 1 (la primera publicada). */
+            private fun createV1(db: SQLiteDatabase) {
+                db.execSQL("CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                db.execSQL(
+                    "CREATE TABLE foods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, kcal REAL, p REAL, c REAL, f REAL, " +
+                        "serving_g REAL, serving_name TEXT, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
+                )
+                db.execSQL(
+                    "CREATE TABLE food_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal TEXT NOT NULL, " +
+                        "food_id INTEGER, name TEXT NOT NULL, grams REAL, kcal REAL, p REAL, c REAL, f REAL)",
+                )
+                db.execSQL("CREATE INDEX idx_entries_date ON food_entries(date)")
+                db.execSQL("CREATE TABLE weights (date TEXT PRIMARY KEY, kg REAL NOT NULL)")
+                db.execSQL(
+                    "CREATE TABLE exercises (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, muscle TEXT, rep_min INTEGER, " +
+                        "rep_max INTEGER, increment REAL, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
+                )
+                db.execSQL("CREATE TABLE routines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, exercise_ids TEXT NOT NULL)")
+                db.execSQL(
+                    "CREATE TABLE workouts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, name TEXT NOT NULL, " +
+                        "start INTEGER NOT NULL, end_time INTEGER, notes TEXT, data TEXT NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE journal (date TEXT PRIMARY KEY, sleep_h REAL, sleep_q INTEGER, energy INTEGER, mood INTEGER, " +
+                        "hunger INTEGER, stress INTEGER, steps INTEGER, notes TEXT)",
+                )
+                db.execSQL(
+                    "CREATE TABLE checkins (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, tdee INTEGER, weight REAL, " +
+                        "kcal INTEGER, p INTEGER, c INTEGER, f INTEGER)",
+                )
+            }
+
+            /** Versión 2: azúcares, mililitros, agua, cardio y datos de Health Connect. */
+            private fun upgradeTo2(db: SQLiteDatabase) {
+                db.execSQL("ALTER TABLE foods ADD COLUMN sugar REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE foods ADD COLUMN unit TEXT NOT NULL DEFAULT 'G'")
+                db.execSQL("ALTER TABLE food_entries ADD COLUMN sugar REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE food_entries ADD COLUMN unit TEXT NOT NULL DEFAULT 'G'")
+                db.execSQL("CREATE TABLE water (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, ml INTEGER NOT NULL, time INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX idx_water_date ON water(date)")
+                db.execSQL(
+                    "CREATE TABLE cardio (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, type TEXT NOT NULL, " +
+                        "minutes INTEGER NOT NULL, distance_km REAL, kcal REAL, avg_hr INTEGER, notes TEXT, external_id TEXT UNIQUE)",
+                )
+                db.execSQL(
+                    "CREATE TABLE health_days (date TEXT PRIMARY KEY, steps INTEGER, active_kcal REAL, distance_m REAL, hr_avg INTEGER, " +
+                        "hr_min INTEGER, hr_max INTEGER, resting_hr INTEGER, sleep_min INTEGER, spo2 REAL, bp_sys REAL, bp_dia REAL, weight REAL)",
+                )
+            }
+
+            /** Al actualizar desde la v1: completa azúcares/unidades de los alimentos base y de lo ya registrado. */
+            fun migrateDataTo2(db: SQLiteDatabase) {
+                for (f in Seed.foods) {
+                    val updated = db.update(
+                        "foods",
+                        ContentValues().apply { put("sugar", f.per100.sugar); put("unit", f.unit.name) },
+                        "builtin=1 AND name=?", arrayOf(f.name),
+                    )
+                    if (updated == 0) db.insert("foods", null, foodValues(f))
+                }
+                db.execSQL(
+                    "UPDATE food_entries SET " +
+                        "sugar = COALESCE((SELECT foods.sugar FROM foods WHERE foods.id = food_entries.food_id), 0) * grams / 100, " +
+                        "unit = COALESCE((SELECT foods.unit FROM foods WHERE foods.id = food_entries.food_id), 'G') " +
+                        "WHERE food_id IS NOT NULL AND grams IS NOT NULL",
+                )
+            }
         }
 
         override fun onCreate(db: SQLiteDatabase) {
-            db.execSQL("CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-            db.execSQL(
-                "CREATE TABLE foods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, kcal REAL, p REAL, c REAL, f REAL, " +
-                    "serving_g REAL, serving_name TEXT, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
-            )
-            db.execSQL(
-                "CREATE TABLE food_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal TEXT NOT NULL, " +
-                    "food_id INTEGER, name TEXT NOT NULL, grams REAL, kcal REAL, p REAL, c REAL, f REAL)",
-            )
-            db.execSQL("CREATE INDEX idx_entries_date ON food_entries(date)")
-            db.execSQL("CREATE TABLE weights (date TEXT PRIMARY KEY, kg REAL NOT NULL)")
-            db.execSQL(
-                "CREATE TABLE exercises (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, muscle TEXT, rep_min INTEGER, " +
-                    "rep_max INTEGER, increment REAL, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
-            )
-            db.execSQL("CREATE TABLE routines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, exercise_ids TEXT NOT NULL)")
-            db.execSQL(
-                "CREATE TABLE workouts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, name TEXT NOT NULL, " +
-                    "start INTEGER NOT NULL, end_time INTEGER, notes TEXT, data TEXT NOT NULL)",
-            )
-            db.execSQL(
-                "CREATE TABLE journal (date TEXT PRIMARY KEY, sleep_h REAL, sleep_q INTEGER, energy INTEGER, mood INTEGER, " +
-                    "hunger INTEGER, stress INTEGER, steps INTEGER, notes TEXT)",
-            )
-            db.execSQL(
-                "CREATE TABLE checkins (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, tdee INTEGER, weight REAL, " +
-                    "kcal INTEGER, p INTEGER, c INTEGER, f INTEGER)",
-            )
+            createV1(db)
+            upgradeTo2(db)
             seed(db)
         }
 
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) {
+                upgradeTo2(db)
+                migrateDataTo2(db)
+            }
+        }
     }
 }

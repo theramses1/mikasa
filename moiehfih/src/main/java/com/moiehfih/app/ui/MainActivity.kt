@@ -26,6 +26,7 @@ import android.widget.Toast
 import com.moiehfih.app.R
 import com.moiehfih.app.data.AppData
 import com.moiehfih.app.data.Demo
+import com.moiehfih.app.health.HealthSync
 import java.time.LocalDate
 
 /** Una pantalla de la app. Se reconstruye entera con [MainActivity.refresh] cuando cambian los datos. */
@@ -90,6 +91,9 @@ class MainActivity : Activity() {
         // Al volver otro día, las pantallas de "hoy" deben mostrar la nueva fecha.
         refresh()
         tickRest()
+        // Sincronización automática con Health Connect si pasó más de media hora.
+        val last = data.healthLastSync ?: 0L
+        if (data.healthConnected && System.currentTimeMillis() - last > 30 * 60_000L) syncHealth(quiet = true)
     }
 
     override fun onPause() {
@@ -119,6 +123,8 @@ class MainActivity : Activity() {
             "settings" -> push(SettingsScreen(this))
             "exercise" -> data.exercises.firstOrNull { it.name == "Press de banca" }?.let { push(ExerciseDetailScreen(this, it.id)) }
             "food" -> push(FoodSearchScreen(this, LocalDate.now(), com.moiehfih.app.data.Meal.COMIDA))
+            "health" -> push(HealthScreen(this))
+            "cardio" -> push(CardioScreen(this))
         }
         debugOpen = null
     }
@@ -441,8 +447,98 @@ class MainActivity : Activity() {
         }
     }
 
+    // ---------- Health Connect ----------
+
+    var healthSyncing = false
+        private set
+
+    /** Pide los permisos de Health Connect (Android 14+) y sincroniza. */
+    fun connectHealth() {
+        if (!HealthSync.isSupported) {
+            toast("Health Connect integrado requiere Android 14 o superior.")
+            return
+        }
+        requestPermissions(HealthSync.PERMISSIONS, REQUEST_HEALTH)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_HEALTH) return
+        if (HealthSync.grantedPermissions(this).isEmpty()) {
+            toast("Sin permisos de Health Connect no se pueden importar datos.")
+            refresh()
+            return
+        }
+        data.setHealthState(true, data.healthLastSync)
+        syncHealth(quiet = false)
+    }
+
+    fun disconnectHealth() {
+        data.setHealthState(false, data.healthLastSync)
+        refresh()
+        toast("Desconectado. Para quitar los permisos, ábrelos en Health Connect.")
+    }
+
+    fun openHealthConnectSettings() {
+        try {
+            startActivity(
+                Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS").putExtra(Intent.EXTRA_PACKAGE_NAME, packageName),
+            )
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent("android.health.connect.action.HEALTH_HOME_SETTINGS"))
+            } catch (e2: Exception) {
+                toast("No se encontró Health Connect en este teléfono.")
+            }
+        }
+    }
+
+    /** Importa en segundo plano los últimos días (30 la primera vez) y guarda en el hilo principal. */
+    fun syncHealth(quiet: Boolean) {
+        if (!HealthSync.isSupported || healthSyncing) return
+        if (HealthSync.grantedPermissions(this).isEmpty()) {
+            if (!quiet) connectHealth()
+            return
+        }
+        healthSyncing = true
+        if (!quiet) {
+            toast("Sincronizando con Health Connect…")
+            refresh()
+        }
+        val today = LocalDate.now()
+        val last = data.healthLastSync?.let {
+            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        }
+        val from = if (last == null) today.minusDays(29) else minOf(last.minusDays(2), today)
+        val weight = data.derived().trendNow ?: 75.0
+        Thread {
+            val fetched = try {
+                HealthSync.fetch(this, from, today, weight)
+            } catch (e: Exception) {
+                HealthSync.Fetched(emptyList(), emptyList(), listOf(e.message ?: e.javaClass.simpleName))
+            }
+            runOnUiThread {
+                healthSyncing = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val summary = HealthSync.apply(data, fetched)
+                if (!quiet) {
+                    val msg = buildString {
+                        append("Importados ${summary.days} días")
+                        if (summary.sessions > 0) append(", ${summary.sessions} sesiones de cardio")
+                        if (summary.weights > 0) append(", ${summary.weights} pesos")
+                        if (summary.errors.isNotEmpty()) append(". Algunos datos fallaron: ${summary.errors.first()}")
+                    }
+                    toast(msg)
+                }
+                refresh()
+            }
+        }.start()
+    }
+
     companion object {
         private const val REQUEST_EXPORT = 1
         private const val REQUEST_IMPORT = 2
+        private const val REQUEST_HEALTH = 3
     }
 }

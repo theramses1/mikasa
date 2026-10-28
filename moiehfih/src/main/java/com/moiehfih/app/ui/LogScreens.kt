@@ -144,6 +144,23 @@ class JournalScreen(act: MainActivity) : Screen(act) {
                 trailingSub = Calc.trendOn(trend, date)?.let { "tend. ${Fmt.n(it, 1)}" },
             )
             listRow("Entreno", trailing = if (ws.isEmpty()) "Descanso" else ws.joinToString(", ") { it.name })
+            val cardio = data.cardio.filter { it.date == date }
+            listRow("Cardio", trailing = if (cardio.isEmpty()) "—" else cardio.joinToString(", ") { "${it.type.label} ${it.minutes} min" })
+            listRow("Agua", trailing = "${Fmt.n(data.waterTotal(date))} / ${Fmt.n(data.waterGoal())} ml")
+            listRow("Azúcares", trailing = if (logged) "${Fmt.n(tot.sugar)} g" else "—")
+            data.health[date]?.let { h ->
+                listRow(
+                    "Reloj / Health Connect",
+                    listOfNotNull(
+                        h.steps?.let { "👣 ${Fmt.n(it.toInt())} pasos" },
+                        h.restingHr?.let { "❤ reposo $it lpm" },
+                        h.sleepMin?.let { "😴 ${fmtSleep(it)}" },
+                        h.spo2?.let { "SpO₂ ${Fmt.n(it)} %" },
+                        if (h.bpSys != null && h.bpDia != null) "🩺 ${Fmt.n(h.bpSys)}/${Fmt.n(h.bpDia)}" else null,
+                    ).joinToString(" · "),
+                    onClick = { act.push(HealthScreen(act)) },
+                )
+            }
         }
 
         val j = data.journal[date] ?: JournalEntry(date)

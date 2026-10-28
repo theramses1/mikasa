@@ -46,19 +46,43 @@ object Demo {
                         val grams = Calc.roundTo(g * factor, 5.0)
                         val m = food.forGrams(grams)
                         kcal += m.kcal
-                        data.saveEntry(FoodEntry(0, d, meal, food.id, food.name, grams, m))
+                        data.saveEntry(FoodEntry(0, d, meal, food.id, food.name, grams, m, food.unit))
                     }
                     if (rnd.nextDouble() < 0.2) {
                         val beer = foods.getValue("Cerveza")
                         val m = beer.forGrams(710.0)
                         kcal += m.kcal
-                        data.saveEntry(FoodEntry(0, d, Meal.SNACKS, beer.id, beer.name, 710.0, m))
+                        data.saveEntry(FoodEntry(0, d, Meal.SNACKS, beer.id, beer.name, 710.0, m, beer.unit))
                     }
                     real += (kcal - trueTdee) / Calc.KCAL_PER_KG
                 } else {
                     real += (2600 - trueTdee) / Calc.KCAL_PER_KG
                 }
                 if (rnd.nextDouble() < 0.85) data.setWeight(d, Calc.roundTo(real + (rnd.nextDouble() - 0.5) * 1.6, 0.1))
+                repeat(4 + rnd.nextInt(6)) { data.addWater(d, if (rnd.nextBoolean()) 250 else 500) }
+                if (d.dayOfWeek.value in listOf(3, 6, 7) && rnd.nextDouble() < 0.8) {
+                    val type = listOf(CardioType.CORRER, CardioType.CAMINAR, CardioType.BICICLETA)[rnd.nextInt(3)]
+                    val minutes = 25 + rnd.nextInt(40)
+                    val km = when (type) {
+                        CardioType.CORRER -> minutes / 6.0
+                        CardioType.CAMINAR -> minutes / 12.0
+                        else -> minutes / 2.6
+                    }
+                    data.saveCardio(
+                        CardioSession(0, d, type, minutes, Calc.roundTo(km, 0.1), Calc.cardioKcal(type.met, real, minutes), 120 + rnd.nextInt(40)),
+                    )
+                }
+                // Datos como los que importaría Health Connect desde un reloj.
+                if (i >= days - 21) {
+                    data.saveHealthDay(
+                        HealthDay(
+                            d, steps = 5000L + rnd.nextInt(8000), activeKcal = 300.0 + rnd.nextInt(400), distanceM = 4000.0 + rnd.nextInt(6000),
+                            hrAvg = 70L + rnd.nextInt(10), hrMin = 52L + rnd.nextInt(6), hrMax = 140L + rnd.nextInt(40),
+                            restingHr = 56L + rnd.nextInt(6), sleepMin = 380L + rnd.nextInt(120), spo2 = 95.0 + rnd.nextInt(4),
+                            bpSys = 112.0 + rnd.nextInt(14), bpDia = 70.0 + rnd.nextInt(10),
+                        ),
+                    )
+                }
                 data.saveJournal(
                     JournalEntry(
                         d,
@@ -107,5 +131,6 @@ object Demo {
         // Check-in "vencido" para que se vea la tarjeta de check-in semanal.
         data.recalcTargets(today.minusDays(7))
         data.targets?.let { data.setTargets(it.copy(date = today.minusDays(7))) }
+        data.setHealthState(false, null)
     }
 }

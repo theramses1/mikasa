@@ -42,6 +42,8 @@ object Pal {
     val protein get() = c(0xFFE0573F, 0xFFFF7A5C)
     val carbs get() = c(0xFF2F9BE0, 0xFF4FB3F6)
     val fat get() = c(0xFFE6A817, 0xFFF5C542)
+    val sugar get() = c(0xFFD9467A, 0xFFFF77A8)
+    val water get() = c(0xFF1E9BD7, 0xFF4FC3F7)
     val scale get() = c(0xFF9AA3B2, 0xFF5D6573)
     val onAccent = 0xFFFFFFFF.toInt()
 

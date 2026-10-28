@@ -48,6 +48,10 @@ launch --es tab diet --es open food
 shot 07-buscar-alimento
 launch --es open settings
 shot 08-ajustes
+launch --es open health
+shot 08b-salud
+launch --es open cardio
+shot 08c-cardio
 
 adb shell cmd uimode night yes
 launch --es tab home

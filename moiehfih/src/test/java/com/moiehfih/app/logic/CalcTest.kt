@@ -126,4 +126,13 @@ class CalcTest {
         assertEquals("2.5", Calc.fmtKg(2.5))
         assertEquals("60", Calc.fmtKg(60.0))
     }
+
+    @Test
+    fun waterSugarAndCardio() {
+        assertEquals(2800, Calc.waterGoalMl(80.0))
+        assertEquals(1500, Calc.waterGoalMl(30.0))
+        assertEquals(2500, Calc.waterGoalMl(null))
+        assertEquals(57, Calc.sugarLimitG(2280))
+        assertEquals(392.0, Calc.cardioKcal(9.8, 80.0, 30), 1e-9)
+    }
 }

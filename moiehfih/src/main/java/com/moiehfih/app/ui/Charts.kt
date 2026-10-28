@@ -10,7 +10,12 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** Barra de progreso redondeada; se pone roja si pasa del 110 %. */
-class ProgressBarView(context: Context, private val fraction: Double, private val color: Int) : View(context) {
+class ProgressBarView(
+    context: Context,
+    private val fraction: Double,
+    private val color: Int,
+    private val overIsBad: Boolean = true,
+) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
 
@@ -21,7 +26,7 @@ class ProgressBarView(context: Context, private val fraction: Double, private va
         canvas.drawRoundRect(rect, r, r, paint)
         val f = fraction.coerceIn(0.0, 1.0).toFloat()
         if (f <= 0f) return
-        paint.color = if (fraction > 1.1) Pal.bad else color
+        paint.color = if (overIsBad && fraction > 1.1) Pal.bad else color
         rect.set(0f, 0f, max(height.toFloat(), width * f), height.toFloat())
         canvas.drawRoundRect(rect, r, r, paint)
     }

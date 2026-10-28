@@ -12,6 +12,8 @@ import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import com.moiehfih.app.data.AppData
+import com.moiehfih.app.data.CardioSession
+import com.moiehfih.app.data.CardioType
 import com.moiehfih.app.data.Exercise
 import com.moiehfih.app.data.MUSCLES
 import com.moiehfih.app.data.Routine
@@ -90,10 +92,11 @@ class TrainScreen(act: MainActivity) : Screen(act) {
     private var view = 0
 
     override fun build(root: LinearLayout) {
-        root.segmented(listOf("Entrenar", "Historial", "Ejercicios"), view) { view = it; act.refresh() }
+        root.segmented(listOf("Pesas", "Cardio", "Historial", "Ejercicios"), view) { view = it; act.refresh() }
         when (view) {
             0 -> buildTrain(root)
-            1 -> buildHistory(root)
+            1 -> cardioContent(act, root)
+            2 -> buildHistory(root)
             else -> buildExercises(root)
         }
     }
@@ -505,5 +508,110 @@ class RoutineEditScreen(act: MainActivity, private val id: Long?) : Screen(act) 
         if (id != null) root.button("Eliminar rutina", Btn.DANGER) {
             act.confirm("¿Eliminar esta rutina?", "Eliminar") { data.deleteRoutine(id); act.pop() }
         }
+    }
+}
+
+// ---------- Cardio ----------
+
+class CardioScreen(act: MainActivity) : Screen(act) {
+    override val title = "Cardio"
+    override fun build(root: LinearLayout) = cardioContent(act, root)
+}
+
+fun cardioContent(act: MainActivity, root: LinearLayout) {
+    val data = act.data
+    val today = LocalDate.now()
+    root.button("+ Registrar cardio", Btn.PRIMARY) { cardioDialog(act, null) }.margins(bottom = 4)
+    if (data.healthConnected) {
+        root.muted("Las sesiones de tu reloj o app (Health Connect) se importan solas al sincronizar.", 12f).margins(top = 4)
+    }
+    val week = data.cardio.filter { it.date > today.minusDays(7) }
+    root.sectionTitle("Últimos 7 días")
+    root.statCards(
+        Triple("${week.sumOf { it.minutes }}", "Minutos", Pal.text),
+        Triple(Fmt.n(week.sumOf { it.kcal ?: 0.0 }), "kcal", Pal.text),
+        Triple(Fmt.n(week.sumOf { it.distanceKm ?: 0.0 }, 1), "km", Pal.text),
+    )
+    root.muted("Referencia de la OMS: 150-300 min de actividad moderada (o 75-150 intensa) por semana.", 12f).margins(bottom = 10)
+
+    // Minutos por día de las últimas 4 semanas.
+    val days = (27L downTo 0L).map { today.minusDays(it) }
+    if (data.cardio.any { it.date >= days.first() }) {
+        root.card {
+            h3("Minutos por día (4 semanas)").margins(bottom = 8)
+            val values = days.map { d -> data.cardio.filter { it.date == d }.sumOf { it.minutes }.takeIf { it > 0 }?.toDouble() }
+            add(LineChartView(context, listOf(LineChartView.Series(values, Pal.good, line = false, dots = true)), shortDate(days.first()) to shortDate(days.last()), decimals = 0), height = dp(150))
+        }
+    }
+
+    val list = data.cardio.sortedWith(compareByDescending<CardioSession> { it.date }.thenByDescending { it.id })
+    root.card {
+        h3("Sesiones")
+        if (list.isEmpty()) muted("Aún no hay sesiones de cardio.").margins(top = 6)
+        for (c in list.take(40)) {
+            val parts = listOfNotNull(
+                "${c.minutes} min",
+                c.distanceKm?.let { "${Fmt.n(it, 2)} km" },
+                c.avgHr?.let { "❤ $it lpm" },
+                if (c.externalId != null) "reloj/app" else null,
+            )
+            listRow(
+                "${c.type.label} · ${Fmt.date(c.date)}",
+                parts.joinToString(" · ") + if (c.notes.isNotBlank() && c.externalId == null) "\n${c.notes}" else "",
+                c.kcal?.let { "${Fmt.n(it)} kcal" },
+                onDelete = {
+                    act.confirm("¿Eliminar esta sesión de cardio?", "Eliminar") { data.deleteCardio(c.id); act.refresh() }
+                },
+                onClick = { cardioDialog(act, c) },
+            )
+        }
+    }
+}
+
+/** Registrar o editar una sesión de cardio. Si no se indican calorías, se estiman con MET × peso × tiempo. */
+fun cardioDialog(act: MainActivity, existing: CardioSession?) {
+    val data = act.data
+    var date = existing?.date ?: LocalDate.now()
+    lateinit var type: Spinner
+    lateinit var minutes: EditText
+    lateinit var km: EditText
+    lateinit var kcal: EditText
+    lateinit var hr: EditText
+    lateinit var notes: EditText
+    act.formDialog(if (existing == null) "Registrar cardio" else "Editar cardio", build = {
+        text("Actividad", 13f, Pal.muted, bold = true).margins(bottom = 4)
+        type = add(Spinner(context).apply {
+            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, CardioType.values().map { it.label })
+            setSelection((existing?.type ?: CardioType.CORRER).ordinal)
+        })
+        type.margins(bottom = 10)
+        text("Fecha", 13f, Pal.muted, bold = true).margins(bottom = 4)
+        lateinit var dateBtn: TextView
+        dateBtn = button(Fmt.date(date, longForm = true)) {
+            act.pickDate(date) { date = it; dateBtn.text = Fmt.date(it, longForm = true) }
+        }
+        dateBtn.margins(bottom = 10)
+        minutes = field("Duración (min)", existing?.minutes?.toString() ?: "", InputKind.INT)
+        km = field("Distancia (km, opcional)", Fmt.plain(existing?.distanceKm, 2), InputKind.DECIMAL)
+        kcal = field("Calorías (opcional)", existing?.kcal?.let { Fmt.plain(it, 0) } ?: "", InputKind.DECIMAL, hint = "se estiman si lo dejas vacío")
+        hr = field("Pulso promedio (lpm, opcional)", existing?.avgHr?.toString() ?: "", InputKind.INT)
+        notes = field("Notas", existing?.notes ?: "")
+    }) {
+        val min = Fmt.parse(minutes.text)?.toInt()
+        if (min == null || min !in 1..1440) return@formDialog "Indica la duración en minutos."
+        val t = CardioType.values()[type.selectedItemPosition]
+        val weight = data.derived().trendNow ?: 75.0
+        data.saveCardio(
+            CardioSession(
+                existing?.id ?: 0, date, t, min,
+                Fmt.parse(km.text)?.takeIf { it > 0 },
+                Fmt.parse(kcal.text)?.takeIf { it > 0 } ?: Calc.cardioKcal(t.met, weight, min),
+                Fmt.parse(hr.text)?.toInt()?.takeIf { it in 30..230 },
+                notes.text.toString().trim(),
+                existing?.externalId,
+            ),
+        )
+        act.refresh()
+        null
     }
 }

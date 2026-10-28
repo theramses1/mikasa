@@ -132,6 +132,18 @@ object Calc {
         return MacroTargets(kcal, p, c, f)
     }
 
+    // ---------- Agua, azúcar y cardio ----------
+
+    /** Meta de agua: ~35 ml por kg de peso, redondeada a 50 ml (mínimo 1.5 L). */
+    fun waterGoalMl(weightKg: Double?): Int =
+        if (weightKg == null) 2500 else max(1500, (roundTo(weightKg * 35, 50.0)).toInt())
+
+    /** Límite orientativo de azúcares: 10 % de las calorías del día (recomendación de la OMS). */
+    fun sugarLimitG(kcal: Int): Int = (kcal * 0.10 / 4).roundToInt()
+
+    /** Calorías de una sesión de cardio con MET × peso × horas. */
+    fun cardioKcal(met: Double, weightKg: Double, minutes: Int): Double = met * weightKg * minutes / 60.0
+
     // ---------- Entrenamiento ----------
 
     /** 1RM estimado (Epley). */

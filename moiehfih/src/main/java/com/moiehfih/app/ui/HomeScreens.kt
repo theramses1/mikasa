@@ -35,7 +35,52 @@ fun LinearLayout.dayCard(act: MainActivity, date: LocalDate, title: String) {
             right.macroBar("Proteína", Pal.protein, tot.p, tg.p)
             right.macroBar("Carbos", Pal.carbs, tot.c, tg.c)
             right.macroBar("Grasa", Pal.fat, tot.f, tg.f)
+            right.macroBar("Azúcares (máx.)", Pal.sugar, tot.sugar, Calc.sugarLimitG(tg.kcal))
         }
+    }
+}
+
+/** Tarjeta de agua del día con botones rápidos. */
+fun LinearLayout.waterCard(act: MainActivity, date: LocalDate) {
+    val data = act.data
+    val total = data.waterTotal(date)
+    val goal = data.waterGoal()
+    card {
+        row {
+            h3("💧 Agua").weighted()
+            text("${Fmt.n(total)} / ${Fmt.n(goal)} ml", 14f, bold = true)
+        }.margins(bottom = 8)
+        add(ProgressBarView(context, total.toDouble() / goal, Pal.water, overIsBad = false), height = dp(10))
+        val glasses = data.water[date]?.size ?: 0
+        muted(
+            if (total >= goal) "¡Meta cumplida! ($glasses tomas)"
+            else "Faltan ${Fmt.n(goal - total)} ml · $glasses tomas",
+            12f,
+        ).margins(top = 6, bottom = 8)
+        row {
+            for (ml in listOf(250, 500)) {
+                button("+$ml ml", small = true) { data.addWater(date, ml); act.refresh() }.margins(end = 6)
+            }
+            button("Otra", small = true) { waterDialog(act, date) }.margins(end = 6)
+            val last = data.water[date]?.lastOrNull()
+            if (last != null) button("Deshacer", Btn.GHOST, small = true) {
+                data.deleteWater(last)
+                act.refresh()
+            }
+        }
+    }
+}
+
+fun waterDialog(act: MainActivity, date: LocalDate) {
+    lateinit var amount: android.widget.EditText
+    act.formDialog("Agregar agua", "Agregar", build = {
+        amount = field("Cantidad (ml)", "", InputKind.INT, "330")
+    }) {
+        val ml = Fmt.parse(amount.text)?.toInt()
+        if (ml == null || ml !in 1..5000) return@formDialog "Indica entre 1 y 5,000 ml."
+        act.data.addWater(date, ml)
+        act.refresh()
+        null
     }
 }
 
@@ -88,6 +133,7 @@ class HomeScreen(act: MainActivity) : Screen(act) {
         }
 
         root.dayCard(act, today, "Hoy")
+        root.waterCard(act, today)
 
         val weekAgo = today.minusDays(7)
         val expWeekAgo = d.exp.lastOrNull { it.date <= weekAgo }?.tdee
@@ -132,8 +178,11 @@ class HomeScreen(act: MainActivity) : Screen(act) {
             muted(if (data.checkinDue(today)) "Check-in pendiente" else "Próximo check-in en $next día${if (next == 1) "" else "s"}", 12f).margins(top = 8)
         }
 
+        root.healthCard(act, today)
+
         val finished = data.finishedWorkouts()
         val thisWeek = finished.count { it.date > today.minusDays(7) }
+        val cardioWeek = data.cardio.filter { it.date > today.minusDays(7) }
         val active = data.activeWorkout()
         val last = finished.maxByOrNull { it.start }
         root.card {
@@ -149,6 +198,11 @@ class HomeScreen(act: MainActivity) : Screen(act) {
                 }
                 else -> button("Empezar tu primer entreno") { act.selectTab(MainActivity.Tab.TRAIN) }
             }
+            muted(
+                if (cardioWeek.isEmpty()) "Sin cardio esta semana"
+                else "Cardio: ${cardioWeek.size} sesiones · ${cardioWeek.sumOf { it.minutes }} min · ${Fmt.n(cardioWeek.sumOf { it.kcal ?: 0.0 })} kcal (7 días)",
+                12.5f,
+            ).margins(top = 10)
         }
 
         val j = data.journal[today]
@@ -329,6 +383,29 @@ class SettingsScreen(act: MainActivity) : Screen(act) {
                     stat(Fmt.n(tg.f), "G (g)").weighted()
                 }
             }
+        }
+
+        root.card {
+            h2("Agua").margins(bottom = 8)
+            val auto = Calc.waterGoalMl(data.derived().trendNow)
+            val goal = field("Meta diaria (ml)", data.waterGoalOverride?.toString() ?: "", InputKind.INT, "automática: ${Fmt.n(auto)}")
+            muted("Si la dejas vacía se calcula con tu peso (≈35 ml por kg).", 12f)
+            button("Guardar") {
+                val text = goal.text.toString().trim()
+                val ml = Fmt.parse(text)?.toInt()
+                if (text.isNotEmpty() && (ml == null || ml !in 500..8000)) return@button act.toast("Indica entre 500 y 8,000 ml.")
+                data.setWaterGoal(if (text.isEmpty()) null else ml)
+                act.toast("Meta de agua: ${Fmt.n(data.waterGoal())} ml")
+                act.refresh()
+            }.margins(top = 8)
+        }
+
+        root.card({ act.push(HealthScreen(act)) }) {
+            row {
+                h2("Salud y relojes").weighted()
+                if (data.healthConnected) pill("Conectado", Pal.good)
+            }
+            muted("Importa pasos, pulso, sueño, SpO₂, presión, peso y sesiones de cardio desde Google Fit, Fitbit, Samsung Health y otros, vía Health Connect.").margins(top = 4)
         }
 
         root.card {

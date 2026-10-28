@@ -7,6 +7,7 @@ import android.widget.Spinner
 import android.widget.TextView
 import com.moiehfih.app.data.Food
 import com.moiehfih.app.data.FoodEntry
+import com.moiehfih.app.data.FoodUnit
 import com.moiehfih.app.data.Macros
 import com.moiehfih.app.data.Meal
 import java.text.Normalizer
@@ -19,6 +20,7 @@ class DietScreen(act: MainActivity) : Screen(act) {
     override fun build(root: LinearLayout) {
         root.dateNav(act, date) { date = it; act.refresh() }
         root.dayCard(act, date, "Resumen del día")
+        root.waterCard(act, date)
         val entries = data.entries[date].orEmpty()
         for (meal in Meal.values()) {
             val items = entries.filter { it.meal == meal }
@@ -31,7 +33,7 @@ class DietScreen(act: MainActivity) : Screen(act) {
                 for (e in items) {
                     listRow(
                         e.name,
-                        (e.grams?.let { "${Fmt.n(it)} g · " } ?: "") + "P ${Fmt.n(e.macros.p)} · C ${Fmt.n(e.macros.c)} · G ${Fmt.n(e.macros.f)}",
+                        entryMeta(e),
                         Fmt.n(e.macros.kcal),
                         onDelete = { data.deleteEntry(e); act.refresh() },
                         onClick = { editEntry(act, e) },
@@ -65,6 +67,7 @@ class DietScreen(act: MainActivity) : Screen(act) {
                     stat(Fmt.n(avg { it.p }), "Proteína", size = 18f).weighted()
                     stat(Fmt.n(avg { it.c }), "Carbos", size = 18f).weighted()
                     stat(Fmt.n(avg { it.f }), "Grasa", size = 18f).weighted()
+                    stat(Fmt.n(avg { it.sugar }), "Azúcares", size = 18f).weighted()
                 }
             }
         }
@@ -78,6 +81,11 @@ class DietScreen(act: MainActivity) : Screen(act) {
         act.refresh()
     }
 }
+
+/** Cantidad y macros de una entrada, p. ej. «250 ml · P 8 · C 12 · G 0 · Az 12». */
+fun entryMeta(e: FoodEntry): String =
+    (e.grams?.let { "${Fmt.n(it)} ${e.unit.symbol} · " } ?: "") +
+        "P ${Fmt.n(e.macros.p)} · C ${Fmt.n(e.macros.c)} · G ${Fmt.n(e.macros.f)} · Az ${Fmt.n(e.macros.sugar)}"
 
 private fun normalize(s: String) =
     Normalizer.normalize(s.lowercase(Fmt.locale), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
@@ -115,7 +123,8 @@ class FoodSearchScreen(act: MainActivity, private val date: LocalDate, private v
                 for (f in list.take(80)) {
                     listRow(
                         f.name + if (recent.containsKey(f.id)) "  ·  reciente" else "",
-                        "100 g: ${Fmt.n(f.per100.kcal)} kcal · P ${Fmt.n(f.per100.p, 1)} · C ${Fmt.n(f.per100.c, 1)} · G ${Fmt.n(f.per100.f, 1)}",
+                        "100 ${f.unit.symbol}: ${Fmt.n(f.per100.kcal)} kcal · P ${Fmt.n(f.per100.p, 1)} · C ${Fmt.n(f.per100.c, 1)} · " +
+                            "G ${Fmt.n(f.per100.f, 1)} · Az ${Fmt.n(f.per100.sugar, 1)}",
                         onDelete = if (f.builtin) null else ({
                             act.confirm("¿Eliminar «${f.name}» de tu lista? Los registros ya hechos se conservan.", "Eliminar") {
                                 data.deleteFood(f.id); fill()
@@ -137,13 +146,16 @@ class NewFoodScreen(act: MainActivity, private val date: LocalDate, private val 
     override fun build(root: LinearLayout) {
         root.card {
             val name = field("Nombre")
+            text("Tipo", 13f, Pal.muted, bold = true).margins(bottom = 4)
+            var unit = FoodUnit.G
+            segmented(listOf("Sólido (g)", "Líquido (ml)"), 0) { unit = if (it == 1) FoodUnit.ML else FoodUnit.G }
             val r1 = row {}
             val servingName = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (nombre)", hint = "pieza, taza…")
             r1.add(View(context), width = dp(10))
-            val servingG = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (g)", "100", InputKind.DECIMAL)
+            val servingG = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (g o ml)", "100", InputKind.DECIMAL)
             text("Los valores nutricionales son por", 13f, Pal.muted, bold = true).margins(bottom = 4)
             var perServing = false
-            segmented(listOf("100 g", "Porción"), 0) { perServing = it == 1 }
+            segmented(listOf("100 g / 100 ml", "Porción"), 0) { perServing = it == 1 }
             val r2 = row {}
             val p = r2.add(context.vertical(), width = 0, weight = 1f).field("Proteína (g)", kind = InputKind.DECIMAL)
             r2.add(View(context), width = dp(10))
@@ -151,19 +163,25 @@ class NewFoodScreen(act: MainActivity, private val date: LocalDate, private val 
             val r3 = row {}
             val f = r3.add(context.vertical(), width = 0, weight = 1f).field("Grasa (g)", kind = InputKind.DECIMAL)
             r3.add(View(context), width = dp(10))
-            val kcal = r3.add(context.vertical(), width = 0, weight = 1f).field("Calorías", hint = "auto", kind = InputKind.DECIMAL)
+            val sugar = r3.add(context.vertical(), width = 0, weight = 1f).field("Azúcares (g)", kind = InputKind.DECIMAL)
+            val kcal = field("Calorías", hint = "auto (4·P + 4·C + 9·G)", kind = InputKind.DECIMAL)
             button("Guardar y añadir", Btn.PRIMARY) {
                 val n = name.text.toString().trim()
                 if (n.isEmpty()) return@button act.toast("Ponle un nombre.")
                 val pv = Fmt.parse(p.text) ?: 0.0
                 val cv = Fmt.parse(c.text) ?: 0.0
                 val fv = Fmt.parse(f.text) ?: 0.0
+                val sv = Fmt.parse(sugar.text) ?: 0.0
+                if (sv > cv && cv > 0) return@button act.toast("Los azúcares no pueden ser más que los carbohidratos.")
                 val kv = Fmt.parse(kcal.text) ?: (pv * 4 + cv * 4 + fv * 9)
                 val g = Fmt.parse(servingG.text)
-                if (perServing && (g == null || g <= 0)) return@button act.toast("Indica los gramos de la porción.")
+                if (perServing && (g == null || g <= 0)) return@button act.toast("Indica el tamaño de la porción.")
                 val k = if (perServing) 100.0 / g!! else 1.0
                 val food = data.addFood(
-                    Food(0, n, Macros(kv * k, pv * k, cv * k, fv * k), g ?: 100.0, servingName.text.toString().trim().ifEmpty { "porción" }, false),
+                    Food(
+                        0, n, Macros(kv * k, pv * k, cv * k, fv * k, sv * k), g ?: 100.0,
+                        servingName.text.toString().trim().ifEmpty { "porción" }, false, unit,
+                    ),
                 )
                 act.pop()
                 quantityDialog(act, food, date, meal, null) { act.pop() }
@@ -182,13 +200,14 @@ fun quantityDialog(act: MainActivity, food: Food, date: LocalDate, meal: Meal, e
     fun grams(): Double = (Fmt.parse(amount.text) ?: 0.0) * if (unitServing) food.servingG else 1.0
     fun updatePreview() {
         val m = food.forGrams(grams())
-        preview.text = "${Fmt.n(m.kcal)} kcal  ·  P ${Fmt.n(m.p, 1)}  ·  C ${Fmt.n(m.c, 1)}  ·  G ${Fmt.n(m.f, 1)}"
+        preview.text = "${Fmt.n(m.kcal)} kcal  ·  P ${Fmt.n(m.p, 1)}  ·  C ${Fmt.n(m.c, 1)}  ·  G ${Fmt.n(m.f, 1)}  ·  Az ${Fmt.n(m.sugar, 1)}"
     }
     act.formDialog(food.name, if (entry == null) "Añadir" else "Guardar", build = {
         val initial = if (unitServing) "1" else Fmt.plain(entry?.grams ?: food.servingG)
-        amount = field("Cantidad", initial, InputKind.DECIMAL)
+        amount = field("Cantidad", initial, InputKind.DECIMAL, hint = food.unit.symbol)
         if (hasServing) {
-            val units = listOf("gramos", "${food.servingName} (${Fmt.n(food.servingG)} g)")
+            val unitName = if (food.unit == FoodUnit.ML) "mililitros" else "gramos"
+            val units = listOf(unitName, "${food.servingName} (${Fmt.n(food.servingG)} ${food.unit.symbol})")
             segmented(units, if (unitServing) 1 else 0) { i ->
                 // Convierte la cantidad para que el total no cambie al cambiar de unidad.
                 val g = grams()
@@ -210,7 +229,7 @@ fun quantityDialog(act: MainActivity, food: Food, date: LocalDate, meal: Meal, e
         val g = grams()
         if (g <= 0) return@formDialog "Indica una cantidad."
         act.data.saveEntry(
-            FoodEntry(entry?.id ?: 0, date, Meal.values()[mealSpinner.selectedItemPosition], food.id, food.name, g, food.forGrams(g)),
+            FoodEntry(entry?.id ?: 0, date, Meal.values()[mealSpinner.selectedItemPosition], food.id, food.name, g, food.forGrams(g), food.unit),
         )
         onDone()
         act.refresh()
@@ -224,6 +243,7 @@ fun quickDialog(act: MainActivity, date: LocalDate, meal: Meal, entry: FoodEntry
     lateinit var p: android.widget.EditText
     lateinit var c: android.widget.EditText
     lateinit var f: android.widget.EditText
+    lateinit var sugar: android.widget.EditText
     lateinit var kcal: android.widget.EditText
     lateinit var mealSpinner: Spinner
     act.formDialog(if (entry == null) "Entrada rápida" else "Editar entrada", if (entry == null) "Añadir" else "Guardar", build = {
@@ -231,6 +251,7 @@ fun quickDialog(act: MainActivity, date: LocalDate, meal: Meal, entry: FoodEntry
         p = field("Proteína (g)", Fmt.plain(entry?.macros?.p), InputKind.DECIMAL)
         c = field("Carbos (g)", Fmt.plain(entry?.macros?.c), InputKind.DECIMAL)
         f = field("Grasa (g)", Fmt.plain(entry?.macros?.f), InputKind.DECIMAL)
+        sugar = field("Azúcares (g)", Fmt.plain(entry?.macros?.sugar?.takeIf { it > 0 }), InputKind.DECIMAL)
         kcal = field("Calorías", entry?.macros?.kcal?.let { Fmt.plain(it, 0) } ?: "", InputKind.DECIMAL, hint = "auto")
         text("Comida", 13f, Pal.muted, bold = true).margins(bottom = 4)
         mealSpinner = add(Spinner(context).apply {
@@ -246,7 +267,7 @@ fun quickDialog(act: MainActivity, date: LocalDate, meal: Meal, entry: FoodEntry
         act.data.saveEntry(
             FoodEntry(
                 entry?.id ?: 0, date, Meal.values()[mealSpinner.selectedItemPosition], null,
-                name.text.toString().trim().ifEmpty { "Entrada rápida" }, null, Macros(kv, pv, cv, fv),
+                name.text.toString().trim().ifEmpty { "Entrada rápida" }, null, Macros(kv, pv, cv, fv, Fmt.parse(sugar.text) ?: 0.0),
             ),
         )
         onDone()

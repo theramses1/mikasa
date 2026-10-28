@@ -45,17 +45,20 @@ data class Targets(
     val manual: Boolean,
 )
 
-data class Macros(val kcal: Double, val p: Double, val c: Double, val f: Double) {
-    operator fun plus(o: Macros) = Macros(kcal + o.kcal, p + o.p, c + o.c, f + o.f)
-    operator fun times(k: Double) = Macros(kcal * k, p * k, c * k, f * k)
+data class Macros(val kcal: Double, val p: Double, val c: Double, val f: Double, val sugar: Double = 0.0) {
+    operator fun plus(o: Macros) = Macros(kcal + o.kcal, p + o.p, c + o.c, f + o.f, sugar + o.sugar)
+    operator fun times(k: Double) = Macros(kcal * k, p * k, c * k, f * k, sugar * k)
 
     companion object {
         val ZERO = Macros(0.0, 0.0, 0.0, 0.0)
-        fun fromMacros(p: Double, c: Double, f: Double) = Macros(p * 4 + c * 4 + f * 9, p, c, f)
+        fun fromMacros(p: Double, c: Double, f: Double, sugar: Double = 0.0) = Macros(p * 4 + c * 4 + f * 9, p, c, f, sugar)
     }
 }
 
-/** Valores nutricionales por 100 g. */
+/** Unidad de cantidad de un alimento: sólidos en gramos, líquidos en mililitros. */
+enum class FoodUnit(val symbol: String) { G("g"), ML("ml") }
+
+/** Valores nutricionales por 100 g (o por 100 ml si [unit] es ML). */
 data class Food(
     val id: Long,
     val name: String,
@@ -63,10 +66,13 @@ data class Food(
     val servingG: Double,
     val servingName: String,
     val builtin: Boolean,
+    val unit: FoodUnit = FoodUnit.G,
 ) {
-    fun forGrams(grams: Double) = per100 * (grams / 100.0)
+    /** Macros para una cantidad en la unidad del alimento (g o ml). */
+    fun forGrams(amount: Double) = per100 * (amount / 100.0)
 }
 
+/** [grams] es la cantidad en la unidad [unit] (g o ml); null en entradas rápidas. */
 data class FoodEntry(
     val id: Long,
     val date: LocalDate,
@@ -75,6 +81,57 @@ data class FoodEntry(
     val name: String,
     val grams: Double?,
     val macros: Macros,
+    val unit: FoodUnit = FoodUnit.G,
+)
+
+data class WaterEntry(val id: Long, val date: LocalDate, val ml: Int, val time: Long)
+
+/** Tipos de cardio con su MET aproximado (Compendium of Physical Activities). */
+enum class CardioType(val label: String, val met: Double) {
+    CAMINAR("Caminar", 3.5),
+    CORRER("Correr", 9.8),
+    BICICLETA("Bicicleta", 7.5),
+    BICI_FIJA("Bicicleta fija", 6.8),
+    NADAR("Natación", 7.0),
+    ELIPTICA("Elíptica", 5.0),
+    REMO("Remo", 7.0),
+    ESCALADORA("Escaladora", 9.0),
+    HIIT("HIIT", 8.0),
+    CUERDA("Saltar cuerda", 11.0),
+    SENDERISMO("Senderismo", 6.0),
+    BAILE("Baile", 5.0),
+    DEPORTE("Deporte", 7.0),
+    OTRO("Otro", 5.0),
+}
+
+/** Sesión de cardio. [externalId] identifica las importadas de Health Connect. */
+data class CardioSession(
+    val id: Long,
+    val date: LocalDate,
+    val type: CardioType,
+    val minutes: Int,
+    val distanceKm: Double?,
+    val kcal: Double?,
+    val avgHr: Int?,
+    val notes: String = "",
+    val externalId: String? = null,
+)
+
+/** Resumen diario importado de Health Connect (relojes, pulseras, Google Fit, etc.). */
+data class HealthDay(
+    val date: LocalDate,
+    val steps: Long? = null,
+    val activeKcal: Double? = null,
+    val distanceM: Double? = null,
+    val hrAvg: Long? = null,
+    val hrMin: Long? = null,
+    val hrMax: Long? = null,
+    val restingHr: Long? = null,
+    val sleepMin: Long? = null,
+    val spo2: Double? = null,
+    val bpSys: Double? = null,
+    val bpDia: Double? = null,
+    val weightKg: Double? = null,
 )
 
 data class Exercise(

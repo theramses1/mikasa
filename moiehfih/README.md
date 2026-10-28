@@ -9,16 +9,20 @@ semana, y te dice cuánto peso y cuántas repeticiones hacer en cada ejercicio.
 
 Funciona sin internet y sin cuenta: todo se guarda en el teléfono (SQLite).
 
+> Google Fit fue reemplazado por Health Connect: activa en Google Fit (o en la app de tu reloj)
+> la sincronización con Health Connect y MoiehFih importará esos datos.
+
 ## Funciones
 
 | Pestaña | Qué hace |
 | --- | --- |
-| **Inicio** | Calorías y macros de hoy frente a tu objetivo, gasto energético estimado, peso de tendencia, plan actual y **check-in semanal** que ajusta tus objetivos. |
-| **Dieta** | Registro por comida (desayuno, comida, cena, snacks) con buscador de ~40 alimentos comunes y recientes, alimentos propios (por 100 g o por porción), entrada rápida, editar cantidades (gramos o porciones), copiar el día anterior y promedios de 7 días. |
-| **Entreno** | Rutinas, entreno en vivo (kg, reps, RPE y ✓ por serie) con **temporizador de descanso** que vibra, **sugerencia de carga** por ejercicio, historial, 1RM estimado, récords y series semanales por grupo muscular. La pantalla no se apaga durante el entreno. |
+| **Inicio** | Calorías, macros y **azúcares** de hoy frente a tu objetivo, **agua**, gasto energético estimado, peso de tendencia, actividad y signos vitales del reloj, plan actual y **check-in semanal** que ajusta tus objetivos. |
+| **Dieta** | Registro por comida con buscador de ~40 alimentos comunes y recientes (sólidos en g, **líquidos en ml**, con azúcares), alimentos propios (por 100 g/ml o por porción), entrada rápida, copiar el día anterior, **registro de agua** y promedios de 7 días. |
+| **Entreno** | **Pesas:** rutinas, entreno en vivo (kg, reps, RPE y ✓ por serie) con **temporizador de descanso** que vibra, **sugerencia de carga** por ejercicio, historial, 1RM estimado, récords y series semanales por grupo muscular. **Cardio:** sesiones con duración, distancia, pulso y calorías (estimadas por MET si no las indicas), resumen semanal. |
+| **Salud y relojes** | Conexión con **Health Connect** (Android 14+): importa pasos, calorías activas, distancia, frecuencia cardiaca (media, mínima, máxima y en reposo), sueño, SpO₂, presión arterial, peso y sesiones de cardio de Google Fit, Fitbit, Samsung Health, Garmin, Wear OS, etc. |
 | **Peso** | Pesadas con fecha, peso de tendencia, cambio a 7/30 días, gráfica de peso y gráfica de gasto energético frente a ingesta. |
 | **Bitácora** | Sueño, pasos, calidad del sueño, energía, ánimo, hambre, estrés y notas, junto al resumen automático del día. |
-| **Ajustes** (⚙) | Perfil y objetivo, modo Coach o Manual, segundos de descanso, exportar/importar copia de seguridad (JSON) y borrar datos. |
+| **Ajustes** (⚙) | Perfil y objetivo, modo Coach o Manual, meta de agua, segundos de descanso, Health Connect, exportar/importar copia de seguridad (JSON) y borrar datos. |
 
 Modo claro y oscuro según el sistema; el botón «atrás» de Android navega entre pantallas.
 

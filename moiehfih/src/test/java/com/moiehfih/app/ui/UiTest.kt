@@ -9,7 +9,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.moiehfih.app.data.ActivityLevel
 import com.moiehfih.app.data.AppData
+import com.moiehfih.app.data.CardioSession
+import com.moiehfih.app.data.CardioType
 import com.moiehfih.app.data.Demo
+import com.moiehfih.app.data.FoodUnit
+import com.moiehfih.app.data.HealthDay
+import com.moiehfih.app.health.HealthSync
 import com.moiehfih.app.data.Goal
 import com.moiehfih.app.data.Meal
 import com.moiehfih.app.data.Profile
@@ -300,5 +305,149 @@ class UiTest {
         assertEquals(2, reloaded.weights.size)
         assertEquals(Sex.M, reloaded.profile!!.sex)
         assertEquals(-0.5, reloaded.goal.ratePct, 1e-9)
+    }
+
+    @Test
+    fun waterQuickButtonsAndUndo() {
+        setupProfile()
+        val act = launch()
+        assertTrue(act.has("💧 Agua"))
+        act.click("+250 ml")
+        act.click("+500 ml")
+        assertEquals(750, data.waterTotal(today))
+        assertTrue(act.has("750 / 2,800 ml"))
+        act.click("Deshacer")
+        assertEquals(250, data.waterTotal(today))
+        act.selectTab(MainActivity.Tab.JOURNAL)
+        idle()
+        assertTrue(act.has("250 / 2,800 ml"))
+    }
+
+    @Test
+    fun liquidsUseMillilitersAndSugarIsTracked() {
+        setupProfile()
+        val act = launch()
+        act.selectTab(MainActivity.Tab.DIET)
+        idle()
+        act.all().filterIsInstance<TextView>().first { it.text == "+ Añadir alimento" }.performClick()
+        idle()
+        assertTrue(act.has("100 ml: 34 kcal"))
+        act.clickRow("Leche descremada")
+        dialogPositive() // 1 vaso = 240 ml
+        act.all().filterIsInstance<TextView>().first { it.text == "+ Añadir alimento" }.performClick()
+        idle()
+        act.clickRow("Plátano")
+        dialogPositive() // 1 pieza = 118 g
+        val list = data.entries[today]!!
+        val milk = list.first { it.name == "Leche descremada" }
+        assertEquals(FoodUnit.ML, milk.unit)
+        assertEquals(240.0, milk.grams!!, 1e-9)
+        assertEquals(5.1 * 2.4, milk.macros.sugar, 1e-9)
+        assertEquals(12.2 * 1.18, list.first { it.name == "Plátano" }.macros.sugar, 1e-9)
+        assertTrue(act.has("240 ml · "))
+        assertTrue(act.has("118 g · "))
+        assertTrue(act.has("Azúcares (máx.)"))
+        assertEquals(5.1 * 2.4 + 12.2 * 1.18, data.dayTotals(today).sugar, 1e-9)
+    }
+
+    @Test
+    fun cardioIsLoggedWithEstimatedCalories() {
+        setupProfile()
+        val act = launch()
+        act.selectTab(MainActivity.Tab.TRAIN)
+        idle()
+        act.click("Cardio")
+        act.click("+ Registrar cardio")
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        val inputs = views(dialog.window!!.decorView).filterIsInstance<EditText>()
+        inputs[0].setText("30") // minutos
+        inputs[1].setText("5") // km
+        dialogPositive()
+        val c = data.cardio.single()
+        assertEquals(CardioType.CORRER, c.type)
+        assertEquals(30, c.minutes)
+        assertEquals(5.0, c.distanceKm!!, 1e-9)
+        assertEquals(9.8 * 80 * 0.5, c.kcal!!, 1.0)
+        assertTrue(act.has("Correr · Hoy"))
+        act.selectTab(MainActivity.Tab.HOME)
+        idle()
+        assertTrue(act.has("Cardio: 1 sesiones · 30 min"))
+    }
+
+    @Test
+    fun healthImportSavesDaysWithoutDuplicates() {
+        setupProfile()
+        val fetched = HealthSync.Fetched(
+            listOf(
+                HealthDay(today, steps = 8000, restingHr = 58, sleepMin = 420, weightKg = 79.0),
+                HealthDay(today.minusDays(1), steps = 6000, weightKg = 79.43),
+            ),
+            listOf(CardioSession(0, today, CardioType.CORRER, 40, 7.0, 450.0, 150, "Importado", "hc:abc")),
+            emptyList(),
+        )
+        val summary = HealthSync.apply(data, fetched)
+        assertEquals(2, summary.days)
+        assertEquals(1, summary.weights) // hoy ya tenía peso manual
+        assertEquals(80.0, data.weights[today]!!, 1e-9)
+        assertEquals(79.4, data.weights[today.minusDays(1)]!!, 1e-9)
+        assertEquals(8000L, data.health[today]!!.steps)
+        assertTrue(data.healthConnected)
+        // Volver a sincronizar no duplica la sesión.
+        HealthSync.apply(data, fetched)
+        assertEquals(1, data.cardio.size)
+        val act = launch()
+        assertTrue(act.has("Actividad y signos vitales"))
+        act.push(HealthScreen(act))
+        idle()
+        assertTrue(act.has("Pasos (14 días)"))
+    }
+
+    @Test
+    fun cardioTypesFromHealthConnect() {
+        assertEquals(CardioType.CORRER, HealthSync.cardioType(android.health.connect.datatypes.ExerciseSessionType.EXERCISE_SESSION_TYPE_RUNNING))
+        assertEquals(CardioType.NADAR, HealthSync.cardioType(android.health.connect.datatypes.ExerciseSessionType.EXERCISE_SESSION_TYPE_SWIMMING_POOL))
+        assertNull(HealthSync.cardioType(android.health.connect.datatypes.ExerciseSessionType.EXERCISE_SESSION_TYPE_STRENGTH_TRAINING))
+    }
+
+    @Test
+    fun upgradesVersion1Database() {
+        AppData.resetForTests()
+        val app = RuntimeEnvironment.getApplication()
+        val file = app.getDatabasePath("moiehfih.db")
+        app.deleteDatabase("moiehfih.db")
+        file.parentFile!!.mkdirs()
+        val old = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(file, null)
+        old.execSQL(
+            "CREATE TABLE foods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, kcal REAL, p REAL, c REAL, f REAL, " +
+                "serving_g REAL, serving_name TEXT, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
+        )
+        old.execSQL(
+            "CREATE TABLE food_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal TEXT NOT NULL, " +
+                "food_id INTEGER, name TEXT NOT NULL, grams REAL, kcal REAL, p REAL, c REAL, f REAL)",
+        )
+        for (sql in listOf(
+            "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            "CREATE TABLE weights (date TEXT PRIMARY KEY, kg REAL NOT NULL)",
+            "CREATE TABLE exercises (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, muscle TEXT, rep_min INTEGER, rep_max INTEGER, increment REAL, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
+            "CREATE TABLE routines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, exercise_ids TEXT NOT NULL)",
+            "CREATE TABLE workouts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, name TEXT NOT NULL, start INTEGER NOT NULL, end_time INTEGER, notes TEXT, data TEXT NOT NULL)",
+            "CREATE TABLE journal (date TEXT PRIMARY KEY, sleep_h REAL, sleep_q INTEGER, energy INTEGER, mood INTEGER, hunger INTEGER, stress INTEGER, steps INTEGER, notes TEXT)",
+            "CREATE TABLE checkins (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, tdee INTEGER, weight REAL, kcal INTEGER, p INTEGER, c INTEGER, f INTEGER)",
+            "INSERT INTO foods (id, name, kcal, p, c, f, serving_g, serving_name, builtin) VALUES (1, 'Leche descremada', 34, 3.4, 5, 0.1, 240, 'vaso', 1)",
+            "INSERT INTO food_entries (date, meal, food_id, name, grams, kcal, p, c, f) VALUES ('$today', 'DESAYUNO', 1, 'Leche descremada', 200, 68, 6.8, 10, 0.2)",
+            "INSERT INTO weights VALUES ('$today', 81.5)",
+        )) old.execSQL(sql)
+        old.version = 1
+        old.close()
+
+        data = AppData.get(app)
+        val e = data.entries[today]!!.single()
+        assertEquals(FoodUnit.ML, e.unit)
+        assertEquals(5.1 * 2, e.macros.sugar, 1e-9)
+        assertEquals(81.5, data.weights[today]!!, 1e-9)
+        assertTrue(data.foods.any { it.name == "Jugo de naranja" && it.unit == FoodUnit.ML })
+        assertEquals(1, data.foods.count { it.name == "Leche descremada" })
+        data.addWater(today, 300)
+        assertEquals(300, data.waterTotal(today))
     }
 }
