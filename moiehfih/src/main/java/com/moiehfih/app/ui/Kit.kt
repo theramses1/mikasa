@@ -334,6 +334,7 @@ fun ViewGroup.listRow(
     subtitle: CharSequence? = null,
     trailing: CharSequence? = null,
     trailingSub: CharSequence? = null,
+    onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ): LinearLayout {
@@ -354,6 +355,16 @@ fun ViewGroup.listRow(
             right.text(trailing, 14.5f, bold = true, gravity = Gravity.END)
             if (trailingSub != null) right.muted(trailingSub, 11.5f).gravity = Gravity.END
             right.margins(start = 8)
+        }
+        if (onEdit != null) {
+            add(TextView(ctx).apply {
+                text = "✎"
+                setTextColor(Pal.accent)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                gravity = Gravity.CENTER
+                contentDescription = "Editar"
+                setOnClickListener { onEdit() }
+            }, width = ctx.dp(36), height = ctx.dp(36)).margins(start = 4)
         }
         if (onDelete != null) {
             add(TextView(ctx).apply {

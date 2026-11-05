@@ -325,17 +325,25 @@ class MainActivity : Activity() {
      * Diálogo con un formulario. [onSave] devuelve un mensaje de error para mantener el diálogo
      * abierto, o null si todo fue bien.
      */
-    fun formDialog(title: String, positive: String = "Guardar", build: LinearLayout.() -> Unit, onSave: () -> String?) {
+    fun formDialog(
+        title: String,
+        positive: String = "Guardar",
+        neutral: Pair<String, () -> Unit>? = null,
+        build: LinearLayout.() -> Unit,
+        onSave: () -> String?,
+    ) {
         val body = vertical {
             setPadding(dp(20), dp(8), dp(20), 0)
             build()
         }
-        val dialog = AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this)
             .setTitle(title)
             .setView(ScrollView(this).apply { addView(body) })
             .setPositiveButton(positive, null)
             .setNegativeButton("Cancelar", null)
-            .create()
+        // El botón neutro cierra el diálogo y hace su acción (p. ej. «Editar alimento»).
+        if (neutral != null) builder.setNeutralButton(neutral.first) { _, _ -> neutral.second() }
+        val dialog = builder.create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val error = onSave()

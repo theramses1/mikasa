@@ -479,4 +479,118 @@ class UiTest {
         }
         assertTrue(act.has("Leche descremada"))
     }
+
+    private fun addAvena(grams: Double) {
+        val avena = data.foods.first { it.name == "Avena en hojuelas" }
+        data.saveEntry(com.moiehfih.app.data.FoodEntry(0, today, Meal.DESAYUNO, avena.id, avena.name, grams, avena.forGrams(grams)))
+    }
+
+    @Test
+    fun editFoodAndRecalculatePastEntries() {
+        setupProfile()
+        addAvena(40.0)
+        val act = launch()
+        act.push(SettingsScreen(act))
+        idle()
+        act.clickRow("Mis alimentos")
+        act.clickRow("Avena en hojuelas")
+        assertTrue(act.has("Editar alimento"))
+        assertEquals("16.9", act.field("Proteína (g)").text.toString())
+        act.field("Nombre").setText("Avena integral")
+        act.field("Proteína (g)").setText("20")
+        act.field("Azúcares (g)").setText("2")
+        assertTrue(act.has("Actualizar también mis 1 registros de este alimento"))
+        act.click("Guardar cambios")
+        val food = data.foods.first { it.name == "Avena integral" }
+        assertEquals(20.0, food.per100.p, 1e-9)
+        assertEquals(2.0, food.per100.sugar, 1e-9)
+        assertFalse(food.builtin) // un alimento base editado pasa a ser del usuario
+        val e = data.entries[today]!!.single()
+        assertEquals("Avena integral", e.name)
+        assertEquals(8.0, e.macros.p, 1e-9)
+        assertEquals(0.8, e.macros.sugar, 1e-9)
+        assertEquals(389 * 0.4, e.macros.kcal, 1e-6) // kcal propias del alimento, distintas de las de los macros
+        assertTrue(act.has("Mis alimentos"))
+    }
+
+    @Test
+    fun editFoodWithoutTouchingPastEntries() {
+        setupProfile()
+        addAvena(40.0)
+        val act = launch()
+        val avena = data.foods.first { it.name == "Avena en hojuelas" }
+        act.push(FoodFormScreen(act, avena, null, null))
+        idle()
+        act.field("Proteína (g)").setText("30")
+        act.all().filterIsInstance<android.widget.CheckBox>().single().isChecked = false
+        act.click("Guardar cambios")
+        assertEquals(30.0, data.food(avena.id)!!.per100.p, 1e-9)
+        assertEquals(16.9 * 0.4, data.entries[today]!!.single().macros.p, 1e-9)
+    }
+
+    @Test
+    fun quantityDialogOpensFoodEditor() {
+        setupProfile()
+        addAvena(40.0)
+        val act = launch()
+        act.selectTab(MainActivity.Tab.DIET)
+        idle()
+        act.clickRow("Avena en hojuelas")
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        idle()
+        assertTrue(act.has("Editar alimento"))
+        assertTrue(act.has("Guardar cambios"))
+    }
+
+    private fun finishedBenchWorkout(): com.moiehfih.app.data.Workout {
+        val w = WorkoutActions.start(data, data.routines.first())
+        w.exercises[0].sets.forEach { it.weight = 60.0; it.reps = 8; it.done = true }
+        WorkoutActions.finish(data, w)
+        return data.finishedWorkouts().single()
+    }
+
+    @Test
+    fun editFinishedWorkout() {
+        setupProfile()
+        val w = finishedBenchWorkout()
+        assertEquals(3, w.exercises.single().sets.size)
+        val act = launch()
+        act.push(WorkoutDetailScreen(act, w.id))
+        idle()
+        act.click("✎ Editar entreno")
+        assertTrue(act.has("Editar entreno"))
+        val inputs = act.all().filterIsInstance<EditText>()
+        // [0] nombre, luego por serie: kg, reps, RPE.
+        assertEquals("60", inputs[1].text.toString())
+        inputs[0].setText("Torso pesado")
+        inputs[1].setText("62.5")
+        inputs[2].setText("10")
+        act.click("− Serie")
+        act.click("Guardar cambios")
+        val saved = data.finishedWorkouts().single()
+        assertEquals("Torso pesado", saved.name)
+        val sets = saved.exercises.single().sets
+        assertEquals(2, sets.size)
+        assertEquals(62.5, sets[0].weight!!, 1e-9)
+        assertEquals(10, sets[0].reps)
+        assertTrue(sets.all { it.done })
+        assertNotNull(saved.end)
+        // La sugerencia usa los datos corregidos: 62.5 × 10 llega al tope del rango (6-10) → subir a 65.
+        val s = WorkoutActions.suggestion(data, data.exercise(saved.exercises.single().exerciseId)!!)
+        assertEquals(65.0, s.weight!!, 1e-9)
+        assertTrue(act.has("Torso pesado"))
+    }
+
+    @Test
+    fun cancelWorkoutEditKeepsOriginal() {
+        setupProfile()
+        val w = finishedBenchWorkout()
+        val act = launch()
+        act.push(WorkoutEditScreen(act, w.id))
+        idle()
+        act.all().filterIsInstance<EditText>()[1].setText("100")
+        act.click("Cancelar")
+        assertEquals(60.0, data.finishedWorkouts().single().exercises.single().sets[0].weight!!, 1e-9)
+    }
 }

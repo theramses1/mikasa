@@ -400,6 +400,14 @@ class SettingsScreen(act: MainActivity) : Screen(act) {
             }.margins(top = 8)
         }
 
+        root.card({ act.push(FoodSearchScreen(act, null, null)) }) {
+            row {
+                h2("Mis alimentos").weighted()
+                text("${data.foods.size}", 14f, Pal.muted, bold = true)
+            }
+            muted("Crea, edita o borra alimentos y corrige sus valores nutricionales.").margins(top = 4)
+        }
+
         root.card({ act.push(HealthScreen(act)) }) {
             row {
                 h2("Salud y relojes").weighted()

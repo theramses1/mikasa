@@ -193,6 +193,32 @@ class AppData private constructor(context: Context) {
         return f.copy(id = id).also { foods += it; changed() }
     }
 
+    /** Registros que usan un alimento (con cantidad), para poder recalcularlos al editarlo. */
+    fun entriesOfFood(id: Long): List<FoodEntry> = entries.values.flatten().filter { it.foodId == id && it.grams != null }
+
+    /**
+     * Guarda los cambios de un alimento. Un alimento base editado pasa a ser del usuario (ya no lo
+     * tocan las actualizaciones de la base). Con [updateEntries] recalcula los registros anteriores
+     * con los nuevos valores; devuelve cuántos cambió.
+     */
+    fun updateFood(f: Food, updateEntries: Boolean): Int {
+        val saved = f.copy(builtin = false)
+        db.update("foods", foodValues(saved), "id=?", arrayOf("${f.id}"))
+        val i = foods.indexOfFirst { it.id == f.id }
+        if (i >= 0) foods[i] = saved else foods += saved
+        var n = 0
+        if (updateEntries) {
+            batch {
+                for (e in entriesOfFood(f.id)) {
+                    saveEntry(e.copy(name = saved.name, unit = saved.unit, macros = saved.forGrams(e.grams!!)))
+                    n++
+                }
+            }
+        }
+        changed()
+        return n
+    }
+
     fun deleteFood(id: Long) {
         db.update("foods", ContentValues().apply { put("deleted", 1) }, "id=?", arrayOf("$id"))
         foods.removeAll { it.id == id }

@@ -218,7 +218,7 @@ class ActiveWorkoutScreen(act: MainActivity) : Screen(act) {
                     }
                 }
                 if (ex != null) suggestionBox(WorkoutActions.suggestion(data, ex))
-                setsTable(this, w, entry, save)
+                setsTable(act, this, entry, withDone = true, save = save)
                 row {
                     button("+ Serie", Btn.GHOST, small = true) {
                         val last = entry.sets.lastOrNull()
@@ -251,65 +251,69 @@ class ActiveWorkoutScreen(act: MainActivity) : Screen(act) {
         }.margins(top = 14)
     }
 
-    private fun setsTable(card: LinearLayout, w: Workout, entry: WorkoutExercise, save: () -> Unit) {
-        val ctx = card.context
-        val header = card.row {}
-        header.margins(top = 8, bottom = 2)
-        for ((label, weight) in listOf("#" to 0.45f, "kg" to 1.3f, "Reps" to 1f, "RPE" to 1f)) {
-            header.add(TextView(ctx).apply {
-                text = label
-                gravity = Gravity.CENTER
-                setTextColor(Pal.muted)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                typeface = Typeface.DEFAULT_BOLD
-            }, width = 0, weight = weight)
-        }
-        header.add(View(ctx), width = ctx.dp(44))
-
-        entry.sets.forEachIndexed { j, set ->
-            val r = card.row {}
-            r.margins(top = 3, bottom = 3)
-            r.add(TextView(ctx).apply {
-                text = "${j + 1}"
-                gravity = Gravity.CENTER
-                setTextColor(Pal.muted)
-            }, width = 0, weight = 0.45f)
-            fun cell(value: String, kind: InputKind, weight: Float, hint: String = "", update: (String) -> Unit): EditText {
-                val e = ctx.input(value, hint, kind).apply {
-                    gravity = Gravity.CENTER
-                    setPadding(ctx.dp(4), ctx.dp(8), ctx.dp(4), ctx.dp(8))
-                    if (set.done) background = rounded(Pal.soft(Pal.good, 45), ctx.dp(10).toFloat(), Pal.border, ctx.dp(1))
-                }
-                e.onChange(update)
-                r.add(e, width = 0, weight = weight).margins(end = 4)
-                return e
-            }
-            cell(Fmt.plain(set.weight), InputKind.DECIMAL, 1.3f) { set.weight = Fmt.parse(it); save() }
-            cell(set.reps?.toString() ?: "", InputKind.INT, 1f) { set.reps = Fmt.parse(it)?.toInt(); save() }
-            cell(Fmt.plain(set.rpe), InputKind.DECIMAL, 1f, "–") { set.rpe = Fmt.parse(it); save() }
-            r.add(TextView(ctx).apply {
-                text = "✓"
-                gravity = Gravity.CENTER
-                typeface = Typeface.DEFAULT_BOLD
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-                setTextColor(if (set.done) Pal.onAccent else Pal.muted)
-                background = rounded(if (set.done) Pal.good else Pal.surface2, ctx.dp(10).toFloat(), if (set.done) Pal.good else Pal.border, ctx.dp(1))
-                contentDescription = "Serie ${j + 1} hecha"
-                setOnClickListener {
-                    set.done = !set.done
-                    save()
-                    if (set.done) act.startRest()
-                    act.refresh()
-                }
-            }, width = ctx.dp(40), height = ctx.dp(40))
-        }
-    }
-
     private fun finish(w: Workout) {
         val records = WorkoutActions.finish(data, w)
         if (records == null) return act.toast("Registra al menos una serie con repeticiones.")
         act.pop()
         act.toast(if (records.isNotEmpty()) "🏆 Nuevo récord: ${records.joinToString(", ")}" else "Entreno guardado 💪")
+    }
+}
+
+/**
+ * Tabla editable de series (kg, reps, RPE). Con [withDone] muestra el botón ✓ del entreno en curso;
+ * al editar un entreno terminado todas las series cuentan como hechas.
+ */
+fun setsTable(act: MainActivity, card: LinearLayout, entry: WorkoutExercise, withDone: Boolean, save: () -> Unit) {
+    val ctx = card.context
+    val header = card.row {}
+    header.margins(top = 8, bottom = 2)
+    for ((label, weight) in listOf("#" to 0.45f, "kg" to 1.3f, "Reps" to 1f, "RPE" to 1f)) {
+        header.add(TextView(ctx).apply {
+            text = label
+            gravity = Gravity.CENTER
+            setTextColor(Pal.muted)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = Typeface.DEFAULT_BOLD
+        }, width = 0, weight = weight)
+    }
+    if (withDone) header.add(View(ctx), width = ctx.dp(44))
+
+    entry.sets.forEachIndexed { j, set ->
+        val r = card.row {}
+        r.margins(top = 3, bottom = 3)
+        r.add(TextView(ctx).apply {
+            text = "${j + 1}"
+            gravity = Gravity.CENTER
+            setTextColor(Pal.muted)
+        }, width = 0, weight = 0.45f)
+        fun cell(value: String, kind: InputKind, weight: Float, hint: String = "", update: (String) -> Unit): EditText {
+            val e = ctx.input(value, hint, kind).apply {
+                gravity = Gravity.CENTER
+                setPadding(ctx.dp(4), ctx.dp(8), ctx.dp(4), ctx.dp(8))
+                if (withDone && set.done) background = rounded(Pal.soft(Pal.good, 45), ctx.dp(10).toFloat(), Pal.border, ctx.dp(1))
+            }
+            e.onChange(update)
+            r.add(e, width = 0, weight = weight).margins(end = 4)
+            return e
+        }
+        cell(Fmt.plain(set.weight), InputKind.DECIMAL, 1.3f) { set.weight = Fmt.parse(it); save() }
+        cell(set.reps?.toString() ?: "", InputKind.INT, 1f) { set.reps = Fmt.parse(it)?.toInt(); save() }
+        cell(Fmt.plain(set.rpe), InputKind.DECIMAL, 1f, "–") { set.rpe = Fmt.parse(it); save() }
+        if (withDone) r.add(TextView(ctx).apply {
+            text = "✓"
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            setTextColor(if (set.done) Pal.onAccent else Pal.muted)
+            background = rounded(if (set.done) Pal.good else Pal.surface2, ctx.dp(10).toFloat(), if (set.done) Pal.good else Pal.border, ctx.dp(1))
+            contentDescription = "Serie ${j + 1} hecha"
+            setOnClickListener {
+                set.done = !set.done
+                save()
+                if (set.done) act.startRest()
+                act.refresh()
+            }
+        }, width = ctx.dp(40), height = ctx.dp(40))
     }
 }
 
@@ -340,17 +344,91 @@ class WorkoutDetailScreen(act: MainActivity, private val id: Long) : Screen(act)
                 }
             }
         }
+        root.button("✎ Editar entreno", Btn.PRIMARY) { act.push(WorkoutEditScreen(act, w.id)) }.margins(bottom = 10)
         root.row {
             button("Eliminar", Btn.DANGER) {
                 act.confirm("¿Eliminar este entreno del historial?", "Eliminar") { data.deleteWorkout(w.id); act.pop() }
             }.weighted()
             add(View(context), width = dp(10))
-            button("Repetir", Btn.PRIMARY) {
+            button("Repetir") {
                 if (data.activeWorkout() != null) return@button act.toast("Ya tienes un entreno en curso.")
                 WorkoutActions.start(data, Routine(0, w.name, w.exercises.map { it.exerciseId }))
                 act.replace(ActiveWorkoutScreen(act))
             }.weighted()
         }
+    }
+}
+
+/**
+ * Edita un entreno ya terminado: nombre, fecha, notas, ejercicios y series. Trabaja sobre una copia
+ * y solo guarda al tocar «Guardar cambios».
+ */
+class WorkoutEditScreen(act: MainActivity, private val id: Long) : Screen(act) {
+    override val title = "Editar entreno"
+    private var draft: Workout? = null
+
+    override fun build(root: LinearLayout) {
+        val original = data.workouts.firstOrNull { it.id == id }
+        if (original == null) {
+            root.card { muted("Este entreno ya no existe.") }
+            return
+        }
+        val w = draft ?: original.copy(
+            exercises = original.exercises.map { ex -> ex.copy(sets = ex.sets.map { it.copy() }.toMutableList()) }.toMutableList(),
+        ).also { draft = it }
+
+        root.card {
+            field("Nombre", w.name).onChange { w.name = it }
+            text("Fecha", 13f, Pal.muted, bold = true).margins(bottom = 4)
+            button(Fmt.date(w.date, longForm = true)) { act.pickDate(w.date) { w.date = it; act.refresh() } }
+        }
+        w.exercises.forEachIndexed { i, entry ->
+            val ex = data.exercise(entry.exerciseId)
+            root.card {
+                row {
+                    val head = add(context.vertical(), width = 0, weight = 1f)
+                    head.h3(ex?.name ?: "Ejercicio eliminado")
+                    if (ex != null) head.muted("${ex.muscle} · rango ${ex.repMin}-${ex.repMax} reps", 12f)
+                    button("✕", Btn.GHOST, small = true) {
+                        act.confirm("¿Quitar este ejercicio del entreno?", "Quitar") { w.exercises.removeAt(i); act.refresh() }
+                    }
+                }
+                setsTable(act, this, entry, withDone = false) {}
+                row {
+                    button("+ Serie", Btn.GHOST, small = true) {
+                        val last = entry.sets.lastOrNull()
+                        entry.sets += last?.copy(rpe = null) ?: WorkoutSet(null, null, null, true)
+                        act.refresh()
+                    }
+                    if (entry.sets.isNotEmpty()) button("− Serie", Btn.GHOST, small = true) {
+                        entry.sets.removeAt(entry.sets.size - 1); act.refresh()
+                    }
+                }.margins(top = 4)
+            }
+        }
+        root.button("+ Añadir ejercicio") {
+            act.push(ExercisePickerScreen(act) { ex ->
+                val s = WorkoutActions.suggestion(data, ex)
+                w.exercises += WorkoutExercise(ex.id, MutableList(s.sets) { WorkoutSet(s.weight, s.reps, null, true) })
+            })
+        }.margins(bottom = 12)
+        root.text("Notas", 13f, Pal.muted, bold = true).margins(bottom = 4)
+        root.add(act.input(w.notes, "Sensaciones, técnica, molestias…", InputKind.MULTILINE)).onChange { w.notes = it }
+        root.row {
+            button("Cancelar") { act.pop() }.weighted()
+            add(View(context), width = dp(10))
+            button("Guardar cambios", Btn.PRIMARY) { save(w) }.weighted()
+        }.margins(top = 14)
+    }
+
+    private fun save(w: Workout) {
+        val exercises = w.exercises.map { ex ->
+            WorkoutExercise(ex.exerciseId, ex.sets.filter { (it.reps ?: 0) > 0 }.map { it.copy(weight = it.weight ?: 0.0, done = true) }.toMutableList())
+        }.filter { it.sets.isNotEmpty() }
+        if (exercises.isEmpty()) return act.toast("El entreno debe tener al menos una serie con repeticiones.")
+        data.saveWorkout(w.copy(name = w.name.trim().ifEmpty { "Entreno" }, exercises = exercises.toMutableList()))
+        act.pop()
+        act.toast("Entreno actualizado")
     }
 }
 

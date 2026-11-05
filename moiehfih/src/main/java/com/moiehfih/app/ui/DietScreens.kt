@@ -96,16 +96,23 @@ fun editEntry(act: MainActivity, e: FoodEntry) {
     if (food != null && e.grams != null) quantityDialog(act, food, e.date, e.meal, e) else quickDialog(act, e.date, e.meal, e)
 }
 
-class FoodSearchScreen(act: MainActivity, private val date: LocalDate, private val meal: Meal) : Screen(act) {
-    override val title = "Añadir a ${meal.label}"
+/**
+ * Buscador de alimentos. Con [meal] añade el elegido a esa comida; sin [meal] es «Mis alimentos»,
+ * para crear, editar y borrar alimentos.
+ */
+class FoodSearchScreen(act: MainActivity, private val date: LocalDate?, private val meal: Meal?) : Screen(act) {
+    override val title = if (meal != null) "Añadir a ${meal.label}" else "Mis alimentos"
     private var query = ""
 
     override fun build(root: LinearLayout) {
         root.row {
-            button("+ Nuevo alimento") { act.push(NewFoodScreen(act, date, meal)) }.weighted()
-            add(View(context), width = dp(10))
-            button("Entrada rápida") { quickDialog(act, date, meal, null) { act.pop() } }.weighted()
+            button("+ Nuevo alimento") { act.push(FoodFormScreen(act, null, date, meal)) }.weighted()
+            if (meal != null && date != null) {
+                add(View(context), width = dp(10))
+                button("Entrada rápida") { quickDialog(act, date, meal, null) { act.pop() } }.weighted()
+            }
         }.margins(bottom = 12)
+        if (meal == null) root.muted("Toca un alimento para editar sus datos.", 12.5f).margins(bottom = 8)
         val search = root.add(act.input(query, "Buscar alimento…"))
         search.margins(bottom = 10)
         val results = root.add(act.vertical())
@@ -114,23 +121,27 @@ class FoodSearchScreen(act: MainActivity, private val date: LocalDate, private v
             val recent = data.recentFoodUse()
             val q = normalize(query.trim())
             val list = data.foods.filter { q.isEmpty() || normalize(it.name).contains(q) }
-                .sortedWith(compareByDescending<Food> { recent[it.id] ?: 0 }.thenBy { normalize(it.name) })
+                .sortedWith(compareByDescending<Food> { if (meal != null) recent[it.id] ?: 0 else 0 }.thenBy { normalize(it.name) })
             if (list.isEmpty()) {
                 results.muted("Sin resultados. Créalo con «Nuevo alimento».")
                 return
             }
             results.card {
-                for (f in list.take(80)) {
+                for (f in list.take(if (meal != null) 80 else 500)) {
                     listRow(
-                        f.name + if (recent.containsKey(f.id)) "  ·  reciente" else "",
+                        f.name + if (meal != null && recent.containsKey(f.id)) "  ·  reciente" else "",
                         "100 ${f.unit.symbol}: ${Fmt.n(f.per100.kcal)} kcal · P ${Fmt.n(f.per100.p, 1)} · C ${Fmt.n(f.per100.c, 1)} · " +
                             "G ${Fmt.n(f.per100.f, 1)} · Az ${Fmt.n(f.per100.sugar, 1)}",
+                        onEdit = if (meal != null) ({ act.push(FoodFormScreen(act, f, date, meal)) }) else null,
                         onDelete = if (f.builtin) null else ({
                             act.confirm("¿Eliminar «${f.name}» de tu lista? Los registros ya hechos se conservan.", "Eliminar") {
                                 data.deleteFood(f.id); fill()
                             }
                         }),
-                        onClick = { quantityDialog(act, f, date, meal, null) { act.pop() } },
+                        onClick = {
+                            if (meal != null && date != null) quantityDialog(act, f, date, meal, null) { act.pop() }
+                            else act.push(FoodFormScreen(act, f, null, null))
+                        },
                     )
                 }
             }
@@ -140,32 +151,54 @@ class FoodSearchScreen(act: MainActivity, private val date: LocalDate, private v
     }
 }
 
-class NewFoodScreen(act: MainActivity, private val date: LocalDate, private val meal: Meal) : Screen(act) {
-    override val title = "Nuevo alimento"
+/** Crear un alimento o editar los datos de uno existente ([existing]). */
+class FoodFormScreen(
+    act: MainActivity,
+    private val existing: Food?,
+    private val date: LocalDate?,
+    private val meal: Meal?,
+) : Screen(act) {
+    override val title = if (existing == null) "Nuevo alimento" else "Editar alimento"
 
     override fun build(root: LinearLayout) {
+        val e = existing
+        val m = e?.per100
+        // Las calorías se dejan en «auto» si coinciden con las de los macros, para que se recalculen.
+        val kcalText = if (m != null && kotlin.math.abs(m.kcal - (m.p * 4 + m.c * 4 + m.f * 9)) > 2) Fmt.plain(m.kcal, 0) else ""
         root.card {
-            val name = field("Nombre")
+            val name = field("Nombre", e?.name ?: "")
             text("Tipo", 13f, Pal.muted, bold = true).margins(bottom = 4)
-            var unit = FoodUnit.G
-            segmented(listOf("Sólido (g)", "Líquido (ml)"), 0) { unit = if (it == 1) FoodUnit.ML else FoodUnit.G }
+            var unit = e?.unit ?: FoodUnit.G
+            segmented(listOf("Sólido (g)", "Líquido (ml)"), if (unit == FoodUnit.ML) 1 else 0) { unit = if (it == 1) FoodUnit.ML else FoodUnit.G }
             val r1 = row {}
-            val servingName = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (nombre)", hint = "pieza, taza…")
+            val servingName = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (nombre)", e?.servingName ?: "", hint = "pieza, taza…")
             r1.add(View(context), width = dp(10))
-            val servingG = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (g o ml)", "100", InputKind.DECIMAL)
+            val servingG = r1.add(context.vertical(), width = 0, weight = 1f).field("Porción (g o ml)", Fmt.plain(e?.servingG ?: 100.0), InputKind.DECIMAL)
             text("Los valores nutricionales son por", 13f, Pal.muted, bold = true).margins(bottom = 4)
             var perServing = false
             segmented(listOf("100 g / 100 ml", "Porción"), 0) { perServing = it == 1 }
             val r2 = row {}
-            val p = r2.add(context.vertical(), width = 0, weight = 1f).field("Proteína (g)", kind = InputKind.DECIMAL)
+            val p = r2.add(context.vertical(), width = 0, weight = 1f).field("Proteína (g)", Fmt.plain(m?.p, 2), InputKind.DECIMAL)
             r2.add(View(context), width = dp(10))
-            val c = r2.add(context.vertical(), width = 0, weight = 1f).field("Carbos (g)", kind = InputKind.DECIMAL)
+            val c = r2.add(context.vertical(), width = 0, weight = 1f).field("Carbos (g)", Fmt.plain(m?.c, 2), InputKind.DECIMAL)
             val r3 = row {}
-            val f = r3.add(context.vertical(), width = 0, weight = 1f).field("Grasa (g)", kind = InputKind.DECIMAL)
+            val f = r3.add(context.vertical(), width = 0, weight = 1f).field("Grasa (g)", Fmt.plain(m?.f, 2), InputKind.DECIMAL)
             r3.add(View(context), width = dp(10))
-            val sugar = r3.add(context.vertical(), width = 0, weight = 1f).field("Azúcares (g)", kind = InputKind.DECIMAL)
-            val kcal = field("Calorías", hint = "auto (4·P + 4·C + 9·G)", kind = InputKind.DECIMAL)
-            button("Guardar y añadir", Btn.PRIMARY) {
+            val sugar = r3.add(context.vertical(), width = 0, weight = 1f).field("Azúcares (g)", Fmt.plain(m?.sugar, 2), InputKind.DECIMAL)
+            val kcal = field("Calorías", kcalText, hint = "auto (4·P + 4·C + 9·G)", kind = InputKind.DECIMAL)
+
+            val used = if (e != null) data.entriesOfFood(e.id).size else 0
+            val updateEntries = if (used > 0) {
+                add(android.widget.CheckBox(context).apply {
+                    text = "Actualizar también mis $used registros de este alimento"
+                    setTextColor(Pal.text)
+                    buttonTintList = android.content.res.ColorStateList.valueOf(Pal.accent)
+                    isChecked = true
+                }).also { it.margins(bottom = 6) } as android.widget.CheckBox
+            } else null
+            if (e?.builtin == true) muted("Es un alimento de la lista base; al guardarlo pasa a ser tuyo y podrás borrarlo.", 12f).margins(bottom = 6)
+
+            button(if (e != null) "Guardar cambios" else if (meal != null) "Guardar y añadir" else "Guardar", Btn.PRIMARY) {
                 val n = name.text.toString().trim()
                 if (n.isEmpty()) return@button act.toast("Ponle un nombre.")
                 val pv = Fmt.parse(p.text) ?: 0.0
@@ -177,14 +210,20 @@ class NewFoodScreen(act: MainActivity, private val date: LocalDate, private val 
                 val g = Fmt.parse(servingG.text)
                 if (perServing && (g == null || g <= 0)) return@button act.toast("Indica el tamaño de la porción.")
                 val k = if (perServing) 100.0 / g!! else 1.0
-                val food = data.addFood(
-                    Food(
-                        0, n, Macros(kv * k, pv * k, cv * k, fv * k, sv * k), g ?: 100.0,
-                        servingName.text.toString().trim().ifEmpty { "porción" }, false, unit,
-                    ),
+                val food = Food(
+                    e?.id ?: 0, n, Macros(kv * k, pv * k, cv * k, fv * k, sv * k), g?.takeIf { it > 0 } ?: 100.0,
+                    servingName.text.toString().trim().ifEmpty { "porción" }, e?.builtin ?: false, unit,
                 )
-                act.pop()
-                quantityDialog(act, food, date, meal, null) { act.pop() }
+                if (e != null) {
+                    val changed = data.updateFood(food, updateEntries?.isChecked == true)
+                    act.pop()
+                    act.toast(if (changed > 0) "Alimento actualizado (y $changed registros)" else "Alimento actualizado")
+                } else {
+                    val saved = data.addFood(food)
+                    act.pop()
+                    if (meal != null && date != null) quantityDialog(act, saved, date, meal, null) { act.pop() }
+                    else act.toast("Alimento guardado")
+                }
             }.margins(top = 6)
         }
     }
@@ -202,7 +241,8 @@ fun quantityDialog(act: MainActivity, food: Food, date: LocalDate, meal: Meal, e
         val m = food.forGrams(grams())
         preview.text = "${Fmt.n(m.kcal)} kcal  ·  P ${Fmt.n(m.p, 1)}  ·  C ${Fmt.n(m.c, 1)}  ·  G ${Fmt.n(m.f, 1)}  ·  Az ${Fmt.n(m.sugar, 1)}"
     }
-    act.formDialog(food.name, if (entry == null) "Añadir" else "Guardar", build = {
+    val editFood = "Editar alimento" to { act.push(FoodFormScreen(act, food, date, entry?.meal ?: meal)) }
+    act.formDialog(food.name, if (entry == null) "Añadir" else "Guardar", neutral = editFood, build = {
         val initial = if (unitServing) "1" else Fmt.plain(entry?.grams ?: food.servingG)
         amount = field("Cantidad", initial, InputKind.DECIMAL, hint = food.unit.symbol)
         if (hasServing) {
