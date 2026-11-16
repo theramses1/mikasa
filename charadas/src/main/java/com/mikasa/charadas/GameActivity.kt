@@ -36,6 +36,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private enum class State { WAITING, COUNTDOWN, PLAYING, FEEDBACK, PAUSED, FINISHED }
 
     private lateinit var category: Category
+    private lateinit var session: CategoryRepository.Session
     private lateinit var root: View
     private lateinit var wordView: TextView
     private lateinit var timerView: TextView
@@ -78,6 +79,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         val cat = CategoryRepository.find(this, intent.getStringExtra(EXTRA_CATEGORY) ?: "")
         if (cat == null || cat.words.isEmpty()) { finish(); return }
         category = cat
+        session = CategoryRepository.startSession(this, cat)
 
         root = findViewById(R.id.root)
         wordView = findViewById(R.id.word)
@@ -182,7 +184,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun nextWord() {
-        currentWord = CategoryRepository.nextWord(category)
+        currentWord = session.next()
         wordView.text = currentWord
         root.setBackgroundColor(playColor)
     }
@@ -212,6 +214,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private fun finishRound() {
         if (state == State.FINISHED) return
         state = State.FINISHED
+        session.commit()
         handler.removeCallbacksAndMessages(null)
         setTapHints(false)
         root.setBackgroundColor(0xFF1B1033.toInt())
@@ -302,7 +305,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             State.PLAYING, State.FEEDBACK -> {
                 if (state == State.FEEDBACK) {
                     // contabiliza la respuesta y deja lista la siguiente palabra
-                    currentWord = CategoryRepository.nextWord(category)
+                    currentWord = session.next()
                 }
                 remainingOnPause = (endTime - SystemClock.elapsedRealtime()).coerceAtLeast(1000)
                 handler.removeCallbacksAndMessages(null)
@@ -333,6 +336,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        // si salen a media ronda, las palabras que ya salieron también cuentan
+        if (::session.isInitialized) session.commit()
         handler.removeCallbacksAndMessages(null)
         tone?.release()
         super.onDestroy()
