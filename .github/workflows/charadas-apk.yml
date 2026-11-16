@@ -1,0 +1,46 @@
+name: Compilar APK de Charadas
+
+on:
+  push:
+    paths:
+      - 'charadas/**'
+      - '.github/workflows/charadas-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :charadas:assembleRelease --stacktrace
+          cp charadas/build/outputs/apk/release/charadas-release.apk Charadas.apk
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Charadas-apk
+          path: Charadas.apk
+
+      - name: Publicar en Releases (descarga directa)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete charadas-latest --yes --cleanup-tag || true
+          gh release create charadas-latest Charadas.apk \
+            --title "Charadas (última versión)" \
+            --notes "APK de Charadas compilado desde ${GITHUB_SHA::7}. Descárgalo en tu Android e instálalo." \
+            --target "$GITHUB_SHA" --prerelease

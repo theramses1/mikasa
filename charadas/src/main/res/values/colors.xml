@@ -1,0 +1,9 @@
+<resources>
+    <color name="bg">#1B1033</color>
+    <color name="surface">#2A1B4D</color>
+    <color name="accent">#FFC83D</color>
+    <color name="correct">#2EBD59</color>
+    <color name="pass">#F08A24</color>
+    <color name="text_dim">#B8ADD6</color>
+    <color name="launcher_bg">#6A3DE8</color>
+</resources>
