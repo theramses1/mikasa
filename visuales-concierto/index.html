@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visuales en Vivo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="stage">
+    <canvas id="out" width="1920" height="1080"></canvas>
+    <div id="hint">Pulsa <b>Iniciar</b> para conectar cámara y audio · <b>H</b> oculta el panel</div>
+  </main>
+
+  <aside id="panel">
+    <h1>Visuales en Vivo</h1>
+
+    <section>
+      <h2>Fuentes</h2>
+      <label>Cámara
+        <select id="camSelect"><option value="">— patrón de prueba —</option></select>
+      </label>
+      <label>Resolución de cámara
+        <select id="camRes">
+          <option value="1920x1080" selected>1080p</option>
+          <option value="1280x720">720p</option>
+          <option value="3840x2160">4K (si la cámara lo da)</option>
+        </select>
+      </label>
+      <label>Audio
+        <select id="micSelect"><option value="">— sin audio —</option></select>
+      </label>
+      <label class="file">Probar con archivo de audio
+        <input type="file" id="audioFile" accept="audio/*">
+      </label>
+      <button id="startBtn" class="primary">Iniciar</button>
+      <p id="status" class="status"></p>
+    </section>
+
+    <section>
+      <h2>Efectos <small>teclas 1–5</small></h2>
+      <div id="effects" class="effects"></div>
+      <p id="effectDesc" class="desc"></p>
+    </section>
+
+    <section>
+      <h2>Control</h2>
+      <label>Intensidad <output id="intensityVal"></output>
+        <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.7">
+      </label>
+      <label>Sensibilidad al audio <output id="sensVal"></output>
+        <input type="range" id="sensitivity" min="0.3" max="2.5" step="0.05" value="1">
+      </label>
+      <label>Color base
+        <input type="range" id="hue" min="0" max="1" step="0.005" value="0.8" class="hue">
+      </label>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="autoCycle"> Cambio automático cada</label>
+        <select id="autoEvery">
+          <option>4</option><option>8</option><option selected>16</option><option>32</option>
+        </select><span>golpes</span>
+      </div>
+      <div class="toggles">
+        <button id="strobeBtn" data-key="S">Strobe <kbd>S</kbd></button>
+        <button id="mirrorBtn" data-key="M">Espejo <kbd>M</kbd></button>
+        <button id="blackoutBtn" data-key="B">Blackout <kbd>B</kbd></button>
+        <button id="tapBtn" data-key="T">Golpe <kbd>T</kbd></button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Audio</h2>
+      <div class="meters">
+        <div><span>Graves</span><i><b id="mBass"></b></i></div>
+        <div><span>Medios</span><i><b id="mMid"></b></i></div>
+        <div><span>Agudos</span><i><b id="mHigh"></b></i></div>
+      </div>
+      <div class="beatline"><span id="beatDot" class="dot"></span> BPM <b id="bpm">—</b> · <span id="fps">0</span> fps</div>
+    </section>
+
+    <section>
+      <h2>Salida al proyector</h2>
+      <label>Resolución de salida
+        <select id="outRes">
+          <option value="1280x720">1280×720</option>
+          <option value="1920x1080" selected>1920×1080</option>
+          <option value="1024x768">1024×768 (4:3)</option>
+          <option value="3840x2160">3840×2160</option>
+        </select>
+      </label>
+      <button id="outputBtn" class="primary">Abrir ventana del proyector</button>
+      <button id="fullBtn">Pantalla completa aquí <kbd>F</kbd></button>
+      <p class="desc">Arrastra la ventana al proyector y haz doble clic en ella para ponerla a pantalla completa. Deja esta ventana abierta (no minimizada).</p>
+    </section>
+  </aside>
+
+  <video id="camVideo" playsinline muted hidden></video>
+
+  <script src="js/shaders.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
