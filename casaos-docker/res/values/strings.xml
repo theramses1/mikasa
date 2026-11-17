@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CasaOS Docker</string>
+    <string name="setup_title">Conectar a CasaOS</string>
+    <string name="server_hint">Dirección del servidor (ej. 192.168.1.50)</string>
+    <string name="user_hint">Usuario de CasaOS</string>
+    <string name="pass_hint">Contraseña</string>
+    <string name="save">Guardar y conectar</string>
+    <string name="setup_help">Introduce la IP o el dominio de tu CasaOS. Si usas un puerto distinto del 80, añádelo (ej. 192.168.1.50:8080). El usuario y la contraseña son los mismos que usas en la web de CasaOS y sirven para listar y controlar tus contenedores Docker.</string>
+    <string name="refresh">Actualizar</string>
+    <string name="open_dashboard">Panel CasaOS</string>
+    <string name="settings">Ajustes</string>
+    <string name="loading">Cargando contenedores…</string>
+    <string name="empty">No hay apps Docker instaladas</string>
+    <string name="start">Iniciar</string>
+    <string name="stop">Detener</string>
+    <string name="restart">Reiniciar</string>
+    <string name="open">Abrir</string>
+</resources>
