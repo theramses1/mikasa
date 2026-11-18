@@ -113,12 +113,22 @@ function fillSelect(sel, devices, emptyText, nameOf) {
 }
 
 let savedOnce = false;
+// Últimos dispositivos conocidos de cada tipo. Chrome concede cámara y micrófono por separado:
+// sin permiso para un tipo, lo devuelve como una entrada vacía (sin id ni nombre). En ese caso
+// se conserva la lista anterior de ese tipo en vez de borrarla.
+const known = { videoinput: [], audioinput: [] };
+
 async function listDevices() {
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const cams = devices.filter((d) => d.kind === 'videoinput');
-  const mics = devices.filter((d) => d.kind === 'audioinput');
-  // Sin permiso activo Chrome devuelve dispositivos sin id ni nombre: no tocar las listas.
-  if (devices.length && devices.every((d) => !d.deviceId && !d.label)) return { cams, mics, blind: true };
+  const blindKinds = [];
+  for (const kind of ['videoinput', 'audioinput']) {
+    const all = devices.filter((d) => d.kind === kind);
+    const usable = all.filter((d) => d.deviceId);
+    if (usable.length) known[kind] = usable.map((d) => ({ deviceId: d.deviceId, label: d.label, groupId: d.groupId }));
+    else if (all.length) blindKinds.push(kind);   // hay dispositivos pero sin permiso: no tocar
+    else known[kind] = [];                       // realmente no hay ninguno
+  }
+  const cams = known.videoinput, mics = known.audioinput;
   const camGroups = new Set(cams.map((d) => d.groupId).filter(Boolean));
 
   for (let i = 0; i < 3; i++) fillSelect($(`cam${i}`), cams, '— ninguna —', (d, k) => d.label || `Cámara ${k + 1}`);
@@ -135,8 +145,21 @@ async function listDevices() {
     });
     if (saved.mic && !$('micSelect').value) restoreChoice($('micSelect'), { id: '', label: saved.mic });
   }
-  return { cams, mics };
+  return { cams, mics, blind: blindKinds.length === 2, blindKinds };
 }
+
+// Pide permiso de cámara y micrófono (por separado si hace falta) y deja el permiso activo
+// mientras se listan los dispositivos. Devuelve los streams temporales para cerrarlos después.
+async function requestAccess() {
+  const md = navigator.mediaDevices;
+  const streams = [];
+  try { streams.push(await md.getUserMedia({ video: true, audio: true })); } catch (e) {
+    try { streams.push(await md.getUserMedia({ video: true })); } catch (e2) { /* sin cámara */ }
+    try { streams.push(await md.getUserMedia({ audio: true })); } catch (e3) { /* sin micrófono */ }
+  }
+  return streams;
+}
+const stopAll = (streams) => streams.forEach((st) => st.getTracks().forEach((t) => t.stop()));
 
 async function startCamera(slot, deviceId, retried = false) {
   const s = slots[slot];
@@ -213,25 +236,23 @@ function reportStatus() {
 }
 
 $('startBtn').addEventListener('click', async () => {
+  let tmp = [];
   try {
-    let tmp = null;
-    if (!state.started) {
-      state.started = true;
-      // Pedir permiso una vez para que el navegador muestre los nombres de los dispositivos.
-      tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() =>
-        navigator.mediaDevices.getUserMedia({ video: true }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true })));
-    }
-    // Listar con el permiso todavía activo; la elección del usuario se conserva.
-    const { cams, blind } = await listDevices();
-    if (tmp) tmp.getTracks().forEach((t) => t.stop());
-    if (!blind) {
-      camCount = cams.length;
-      autoAssign(cams);
-      if (!$('micSelect').value && !state.micManual && $('micSelect').options[1]) $('micSelect').selectedIndex = 1;
-    }
+    state.started = true;
+    setStatus('Pidiendo permiso de cámara y micrófono…');
+    // El permiso se mantiene abierto hasta conectar todo: así Chrome no lo retira a mitad.
+    tmp = await requestAccess();
+    if (!tmp.length) throw new Error('Chrome no dio permiso de cámara ni de micrófono. Revisa el icono de la izquierda de la barra de direcciones.');
+    const { cams } = await listDevices();
+    camCount = cams.length;
+    autoAssign(cams);
+    if (!$('micSelect').value && !state.micManual && $('micSelect').options[1]) $('micSelect').selectedIndex = 1;
     setStatus('Conectando cámaras…');
     for (let i = 0; i < 3; i++) await startCamera(i, $(`cam${i}`).value);
-    if ($('micSelect').value) { await startMic(); }
+    if ($('micSelect').value) await startMic();
+    stopAll(tmp);
+    tmp = [];
+    await listDevices();   // con las cámaras ya abiertas los nombres son definitivos
     store.save();
     reportStatus();
     $('startBtn').textContent = 'Reconectar / aplicar cambios';
@@ -239,7 +260,18 @@ $('startBtn').addEventListener('click', async () => {
   } catch (err) {
     console.error(err);
     setStatus(`No se pudo iniciar: ${err.message}`, true);
+  } finally {
+    stopAll(tmp);
   }
+});
+
+$('rescanBtn').addEventListener('click', async () => {
+  const tmp = await requestAccess();
+  const { cams, mics } = await listDevices();
+  stopAll(tmp);
+  camCount = cams.length;
+  setStatus(`Encontrados: ${cams.length} cámara(s) y ${mics.length} micrófono(s)` +
+    (cams.length ? '' : ' · Si falta el teléfono, revisa el cable y el modo Webcam'), !cams.length);
 });
 
 for (let i = 0; i < 3; i++) {
@@ -542,3 +574,11 @@ if (!navigator.mediaDevices?.enumerateDevices) {
   setStatus('Este navegador no permite acceder a cámara/micrófono. Abre la página con Chrome o Edge.', true);
 }
 if (location.protocol === 'file:') $('fileTip').hidden = false;
+
+// Si Chrome ya tiene permiso, mostrar los dispositivos sin esperar a "Iniciar".
+(async () => {
+  try {
+    const q = await navigator.permissions.query({ name: 'camera' });
+    if (q.state === 'granted') await listDevices();
+  } catch (e) { /* el navegador no permite consultarlo */ }
+})();
