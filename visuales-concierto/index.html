@@ -9,36 +9,69 @@
 <body>
   <main id="stage">
     <canvas id="out" width="1920" height="1080"></canvas>
-    <div id="hint">Pulsa <b>Iniciar</b> para conectar cámara y audio · <b>H</b> oculta el panel</div>
+    <div id="hint">Modo simulador: 3 cámaras de prueba · Pulsa <b>Iniciar</b> para conectar las reales · <b>H</b> oculta el panel</div>
   </main>
 
   <aside id="panel">
     <h1>Visuales en Vivo</h1>
 
     <section>
-      <h2>Fuentes</h2>
-      <label>Cámara
-        <select id="camSelect"><option value="">— patrón de prueba —</option></select>
-      </label>
-      <label>Resolución de cámara
+      <h2>Cámaras USB <small>hasta 3</small></h2>
+      <div class="camslot"><span class="led" id="led0"></span><b>1</b><select id="cam0"><option value="">— ninguna —</option></select></div>
+      <div class="camslot"><span class="led" id="led1"></span><b>2</b><select id="cam1"><option value="">— ninguna —</option></select></div>
+      <div class="camslot"><span class="led" id="led2"></span><b>3</b><select id="cam2"><option value="">— ninguna —</option></select></div>
+      <label>Resolución por cámara
         <select id="camRes">
-          <option value="1920x1080" selected>1080p</option>
-          <option value="1280x720">720p</option>
-          <option value="3840x2160">4K (si la cámara lo da)</option>
+          <option value="1920x1080">1080p</option>
+          <option value="1280x720" selected>720p (recomendado con 2–3 cámaras)</option>
+          <option value="3840x2160">4K (solo 1 cámara)</option>
         </select>
       </label>
-      <label>Audio
+
+      <h2 class="sub">Audio</h2>
+      <label>Micrófono
         <select id="micSelect"><option value="">— sin audio —</option></select>
       </label>
-      <label class="file">Probar con archivo de audio
+      <p class="desc">Puedes usar el micrófono de una cámara (marcado con 🎥) o el de la laptop (💻).</p>
+
+      <label class="file">Simulador: probar con una canción
         <input type="file" id="audioFile" accept="audio/*">
       </label>
-      <button id="startBtn" class="primary">Iniciar</button>
+      <div id="playerRow" class="player" hidden>
+        <button id="playPauseBtn">⏸ Pausa <kbd>P</kbd></button>
+        <span id="songName"></span>
+      </div>
+
+      <button id="startBtn" class="primary">Iniciar cámaras y audio</button>
       <p id="status" class="status"></p>
     </section>
 
     <section>
-      <h2>Efectos <small>teclas 1–5</small></h2>
+      <h2>Cámara al aire</h2>
+      <div class="camBtns">
+        <button id="sel0">Cám 1 <kbd>Z</kbd></button>
+        <button id="sel1">Cám 2 <kbd>X</kbd></button>
+        <button id="sel2">Cám 3 <kbd>C</kbd></button>
+      </div>
+      <label>Composición <small class="kh">tecla V</small>
+        <select id="layout">
+          <option value="0">Una cámara a pantalla completa</option>
+          <option value="1">Pantalla dividida</option>
+          <option value="2">Imagen en imagen</option>
+          <option value="3">Superposición de cámaras</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="camFade" checked> Fundido al cambiar de cámara</label>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="autoCam"> Cambiar de cámara cada</label>
+        <select id="autoCamEvery">
+          <option>2</option><option selected>4</option><option>8</option><option>16</option>
+        </select><span>golpes <kbd>N</kbd></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Efectos <small>1–0 · Shift+1–0</small></h2>
       <div id="effects" class="effects"></div>
       <p id="effectDesc" class="desc"></p>
     </section>
@@ -55,21 +88,21 @@
         <input type="range" id="hue" min="0" max="1" step="0.005" value="0.8" class="hue">
       </label>
       <div class="row">
-        <label class="check"><input type="checkbox" id="autoCycle"> Cambio automático cada</label>
+        <label class="check"><input type="checkbox" id="autoCycle"> Cambiar de efecto cada</label>
         <select id="autoEvery">
           <option>4</option><option>8</option><option selected>16</option><option>32</option>
-        </select><span>golpes</span>
+        </select><span>golpes <kbd>A</kbd></span>
       </div>
       <div class="toggles">
-        <button id="strobeBtn" data-key="S">Strobe <kbd>S</kbd></button>
-        <button id="mirrorBtn" data-key="M">Espejo <kbd>M</kbd></button>
-        <button id="blackoutBtn" data-key="B">Blackout <kbd>B</kbd></button>
-        <button id="tapBtn" data-key="T">Golpe <kbd>T</kbd></button>
+        <button id="strobeBtn">Strobe <kbd>S</kbd></button>
+        <button id="mirrorBtn">Espejo <kbd>M</kbd></button>
+        <button id="blackoutBtn">Blackout <kbd>B</kbd></button>
+        <button id="tapBtn">Golpe <kbd>T</kbd></button>
       </div>
     </section>
 
     <section>
-      <h2>Audio</h2>
+      <h2>Medidores</h2>
       <div class="meters">
         <div><span>Graves</span><i><b id="mBass"></b></i></div>
         <div><span>Medios</span><i><b id="mMid"></b></i></div>
@@ -93,8 +126,6 @@
       <p class="desc">Arrastra la ventana al proyector y haz doble clic en ella para ponerla a pantalla completa. Deja esta ventana abierta (no minimizada).</p>
     </section>
   </aside>
-
-  <video id="camVideo" playsinline muted hidden></video>
 
   <script src="js/shaders.js"></script>
   <script src="js/audio.js"></script>

@@ -1,95 +1,127 @@
 # Visuales en Vivo: visuales para conciertos que reaccionan al audio
 
-Toma el video en vivo de una **DJI Osmo Action 5 Pro** o de un **smartphone**, le aplica efectos que reaccionan a la música en tiempo real (en la GPU) y manda el resultado al **proyector**.
+Toma video en vivo de **hasta 3 cámaras USB a la vez** (DJI Osmo Action 5 Pro en modo webcam, smartphones como webcam o cualquier cámara USB). Le aplica **20 efectos** que reaccionan a la música en tiempo real (en la GPU) y manda el resultado al **proyector**.
 
 No hay que instalar nada: es una página web local que se abre en **Google Chrome o Microsoft Edge** (Windows, macOS o Linux).
 
 ## Arranque rápido
 
-1. Conecta la cámara (ver abajo), el audio y el proyector como **pantalla extendida** (no duplicada).
-2. Abre `index.html` con doble clic en Chrome/Edge (o ejecuta `iniciar.bat` en Windows o `./iniciar.sh` en Mac/Linux).
-3. Pulsa **Iniciar** y acepta los permisos de cámara y micrófono.
-4. Elige la cámara y la entrada de audio en los desplegables.
-5. Pulsa **Abrir ventana del proyector**, arrástrala al proyector y haz **doble clic** para ponerla a pantalla completa.
-6. Deja la ventana de control abierta en el portátil (sin minimizar) y controla el show desde ahí.
+1. Descarga y descomprime la carpeta `visuales-concierto`.
+2. Abre `index.html` con Chrome o Edge (clic derecho → Abrir con). Si Chrome bloquea la cámara, usa `iniciar.bat` (Windows) o `iniciar.sh` (Mac/Linux).
+3. Sin conectar nada ya funciona en **modo simulador**: 3 cámaras de prueba animadas. Carga una canción en "Simulador: probar con una canción" y pausa o reanuda con el botón **⏸ Pausa** o la tecla `P`.
+4. Conecta las cámaras y el proyector como **pantalla extendida** (no duplicada) y pulsa **Iniciar cámaras y audio**. Acepta los permisos.
+5. Las cámaras detectadas se asignan solas a las ranuras 1, 2 y 3. Puedes cambiarlas en los desplegables.
+6. Pulsa **Abrir ventana del proyector**, arrástrala al proyector y haz **doble clic** para ponerla a pantalla completa. Deja la ventana de control abierta (sin minimizar).
 
-> Si Chrome bloquea la cámara al abrir el archivo directamente, usa `iniciar.bat` / `iniciar.sh`: levantan un servidor local en `http://localhost:8080`.
+## Cámaras
 
-## Conectar la cámara
+### Conectar hasta 3 cámaras USB
+- Cada ranura tiene un indicador: 🟢 en vivo, 🟡 simulada, 🔴 error. Pasa el ratón por encima para ver la resolución o el error.
+- **Ancho de banda USB**: varias cámaras en el mismo puerto o hub pueden fallar ("no se pudo abrir"). Para evitarlo:
+  - Usa **720p** por cámara (es la opción predeterminada) cuando conectes 2 o 3.
+  - Conecta cada cámara a un **puerto distinto del ordenador**, mejor si es uno en cada lado, porque suelen ser controladores distintos.
+  - Si usas un hub, que sea USB 3 con alimentación propia.
+- Para cables de más de 3 m usa **alargadores USB activos**.
 
-### DJI Osmo Action 5 Pro (modo webcam, por USB)
-1. Conecta la cámara al ordenador con el cable USB-C.
-2. En la pantalla de la cámara aparece el modo de conexión USB: elige **Webcam**.
-3. En el programa aparecerá como "DJI Osmo Action 5 Pro" o "USB Video Device".
+### DJI Osmo Action 5 Pro (modo webcam)
+1. Conecta la cámara con el cable USB-C.
+2. En la pantalla de la cámara elige **Webcam** como modo de conexión USB.
+3. Aparece como "DJI Osmo Action 5 Pro" o "USB Video Device".
 
-Consejos:
-- La resolución en modo webcam la fija la cámara (puede ser 1080p o 720p). El programa pide 1080p y usa lo que reciba. La resolución real aparece debajo del botón Iniciar.
-- La cámara puede calentarse en sesiones largas. Ponla en un sitio ventilado, sin la batería si tu montaje lo permite, y prueba antes el tiempo total del show.
-- Para distancias de más de 3 m usa un **cable USB alargador activo** (con repetidor). Un cable pasivo largo suele cortar la señal.
-- Opción inalámbrica: emite por RTMP desde la app DJI Mimo a OBS en el portátil y usa la **Cámara virtual de OBS** como entrada aquí. Añade algo de latencia.
+En sesiones largas la cámara puede calentarse: ventílala y haz una prueba con la duración del show.
 
 ### Smartphone
-- **iPhone + Mac**: Continuity Camera. El iPhone aparece como cámara automáticamente.
-- **Android o iPhone en Windows**: apps tipo webcam como DroidCam, Iriun o Camo. Por USB tienen menos retardo que por WiFi.
-- **Cualquier cámara con salida HDMI**: una capturadora HDMI→USB (Elgato Cam Link o una genérica) aparece como webcam.
+- **iPhone + Mac**: Continuity Camera.
+- **Android o iPhone en Windows**: apps tipo webcam (DroidCam, Iriun, Camo). Por USB tienen menos retardo que por WiFi.
+- **Cámara con HDMI**: con una capturadora HDMI→USB aparece como webcam.
 
-## Conectar el audio
+### Mezclar las cámaras en vivo
+- **Cámara al aire**: botones Cám 1, 2 y 3, o teclas `Z` `X` `C`. La que está al aire se marca en rojo.
+- **Composición** (tecla `V` para rotar):
+  - **Una cámara**: pantalla completa, con fundido al cambiar (se puede desactivar para cortes secos).
+  - **Pantalla dividida**: todas las cámaras activas en columnas.
+  - **Imagen en imagen**: la cámara al aire grande y las otras en recuadros.
+  - **Superposición**: todas fundidas una sobre otra.
+- **Cambiar de cámara cada N golpes** (tecla `N`): pasa de una cámara a otra al ritmo de la música.
+- Los efectos se aplican **sobre la composición**, así que los 20 funcionan con cualquier combinación de cámaras.
 
-En "Audio" elige la entrada:
-- **Lo mejor**: una salida de la **consola de mezcla** (aux, rec o matrix) a una **interfaz de audio USB**. Así la señal es limpia y no le afecta el ruido del público.
-- **Rápido**: el micrófono del portátil o de la cámara. Funciona gracias a la auto-ganancia, pero reacciona también al público.
-- **Para ensayar**: "Probar con archivo de audio" reproduce una canción en bucle.
+## Audio
 
-El programa desactiva la cancelación de eco, la supresión de ruido y el control de ganancia automático del navegador, porque están pensados para voz y estropean la música.
+En "Micrófono" elige la fuente:
+- 🎥 **Micrófono de una cámara**: el micrófono de una cámara USB conectada. El programa lo reconoce porque pertenece al mismo dispositivo que la cámara.
+- 💻 **Micrófono de la laptop** o cualquier otra entrada, como una interfaz de audio conectada a la consola. Es la opción con la señal más limpia.
+- **Simulador**: carga una canción de prueba. Se reproduce en bucle y se pausa con **⏸ Pausa** o con `P`.
 
-## Los 5 efectos
+La auto-ganancia adapta la reacción tanto a un micrófono lejano como a una señal de línea. Además, el programa desactiva el procesado de voz del navegador (cancelación de eco, supresión de ruido y control de ganancia automático), que estropea la música.
 
-| # | Efecto | Reacción al sonido |
-|---|--------|--------------------|
-| 1 | **Pulso RGB** | Zoom con el bombo, separación de colores con los graves, tinte con los medios y destello en cada golpe. |
-| 2 | **Caleidoscopio** | Espejos radiales. Los medios lo hacen girar y los graves "respiran" el centro. La intensidad cambia el número de espejos. |
-| 3 | **Bordes Neón** | Solo las siluetas, en neón con estela. Los agudos encienden las líneas y el color recorre la imagen. |
-| 4 | **Estela Psicodélica** | Feedback de video: cada movimiento deja rastros que giran, hacen zoom y cambian de color con la música. |
-| 5 | **Glitch / Datamosh** | Cortes horizontales, bloques congelados, RGB desfasado y posterizado en cada golpe. |
+## Los 20 efectos
 
-## Controles y atajos de teclado
+| Tecla | Efecto | Reacción al sonido |
+|---|---|---|
+| `1` | **Pulso RGB** | Zoom con el bombo, separación de colores con los graves y destello en cada golpe. |
+| `2` | **Caleidoscopio** | Espejos radiales que giran con los medios. Los graves "respiran" el centro. |
+| `3` | **Bordes Neón** | Siluetas en neón con estela. Los agudos encienden las líneas. |
+| `4` | **Estela Psicodélica** | Feedback de video: los movimientos dejan rastros que giran y cambian de color. |
+| `5` | **Glitch / Datamosh** | Cortes, bloques congelados, RGB desfasado y posterizado en cada golpe. |
+| `6` | **Espejo Cuádruple** | Cuatro reflejos que giran. Los graves acercan el centro. |
+| `7` | **Túnel** | La imagen envuelta en un túnel infinito que acelera con la música. |
+| `8` | **Semitono** | Puntos de imprenta que laten con los graves. |
+| `9` | **Píxeles** | Mosaico retro. Los píxeles crecen en cada golpe. |
+| `0` | **Visión Térmica** | Paleta de cámara térmica. El volumen "calienta" la imagen. |
+| `⇧1` | **Ondas Líquidas** | La imagen ondula como agua. Los graves agrandan las olas. |
+| `⇧2` | **Multiplicador** | Cuadrícula de copias de colores. Una se ilumina al ritmo. |
+| `⇧3` | **Pop Art** | Cuatro copias en serigrafía de colores planos. |
+| `⇧4` | **Onda Expansiva** | Cada golpe lanza un anillo que deforma la imagen. |
+| `⇧5` | **Vórtice** | Remolino que retuerce el centro con los graves. |
+| `⇧6` | **Rayos de Luz** | Las zonas brillantes (focos, instrumentos) lanzan rayos que crecen con el volumen. |
+| `⇧7` | **Lluvia Digital** | La imagen dibujada con columnas de símbolos que caen. |
+| `⇧8` | **Solarizado** | Inversión de tonos con un umbral móvil. Negativo en los golpes fuertes. |
+| `⇧9` | **Cuadro Infinito** | Efecto Droste: la imagen dentro de sí misma, una y otra vez. |
+| `⇧0` | **Curvas de Nivel** | Mapa topográfico de líneas de colores que fluyen. |
+
+`⇧` = mantener Shift. También puedes hacer clic en el panel o pasar de efecto con `←` `→`.
+
+## Todos los atajos de teclado
 
 | Tecla | Acción |
-|-------|--------|
-| `1`–`5` | Cambiar de efecto |
+|---|---|
+| `1`–`0`, `Shift`+`1`–`0` | Elegir efecto (1–20) |
 | `←` `→` | Efecto anterior o siguiente |
 | `↑` `↓` | Subir o bajar la intensidad |
-| `A` | Cambio automático de efecto cada N golpes (4/8/16/32) |
-| `S` | Strobe: destello blanco en cada golpe |
+| `Z` `X` `C` | Poner al aire la cámara 1, 2 o 3 |
+| `V` | Cambiar la composición de cámaras |
+| `N` | Cambio automático de cámara con el ritmo |
+| `A` | Cambio automático de efecto con el ritmo |
+| `P` | Pausar o reanudar la canción de prueba |
+| `S` | Strobe: destello en cada golpe |
 | `M` | Espejo horizontal |
 | `B` | Blackout con fundido a negro |
-| `T` | Golpe manual (marca el ritmo a mano si el audio falla) |
-| `F` | Pantalla completa (también funciona en la ventana del proyector) |
+| `T` | Golpe manual (marcar el ritmo a mano) |
+| `F` | Pantalla completa |
 | `H` | Ocultar o mostrar el panel |
 
-- **Sensibilidad**: súbela si los visuales reaccionan poco y bájala si "saltan" todo el rato.
-- **Color base**: cambia la paleta de los efectos.
-- Los medidores de graves, medios y agudos, el punto de golpe y el BPM estimado sirven para comprobar que el audio llega.
+Los atajos también funcionan con la ventana del proyector seleccionada.
 
 ## Cómo funciona
 
 ```
-Cámara (USB/webcam) ──► <video> ──► textura GPU ─┐
-                                                 ├─► shader del efecto ──► framebuffer (feedback) ──► canvas ──► ventana proyector
-Audio (interfaz/mic) ──► Web Audio FFT ──► graves/medios/agudos + detección de golpes ─┘
+Cám 1 ─┐
+Cám 2 ─┼─► mezclador (una / dividida / PiP / superposición) ─► efecto (con feedback) ─► blackout/strobe ─► proyector
+Cám 3 ─┘                                                          ▲
+Audio ─► FFT ─► graves / medios / agudos + detección de golpes ───┘
 ```
 
-- `js/audio.js`: FFT de 2048 puntos. Divide el sonido en graves (20–150 Hz), medios (150 Hz–2 kHz) y agudos (2–10 kHz). Cada banda se normaliza automáticamente según sus mínimos y máximos recientes. Los golpes se detectan por subidas bruscas de graves, y el BPM sale de la mediana entre golpes.
-- `js/shaders.js`: los efectos en GLSL. Cada efecto es una función `vec3 effect()`. Recibe la cámara (`uCam`), el frame anterior (`uPrev`) y las bandas de audio.
-- `js/renderer.js`: WebGL2 con dos framebuffers alternos para las estelas.
-- `js/main.js`: la interfaz, los atajos y la ventana del proyector (recibe el canvas mediante `captureStream`).
+- `js/audio.js`: análisis de audio. Divide el sonido en graves (20–150 Hz), medios (150 Hz–2 kHz) y agudos (2–10 kHz) con auto-ganancia, detecta los golpes y estima el BPM. También reproduce y pausa la canción de prueba.
+- `js/shaders.js`: el mezclador de cámaras y los 20 efectos en GLSL.
+- `js/renderer.js`: WebGL2. Usa 3 texturas de cámara, un pase de mezcla y dos framebuffers alternos para las estelas.
+- `js/main.js`: la interfaz, las cámaras, los atajos y la ventana del proyector.
 
 ### Añadir un efecto nuevo
-Añade un objeto al array `EFFECTS` en `js/shaders.js` con `name`, `desc` y `frag` (que defina `vec3 effect()`). Aparecerá solo en el panel con la siguiente tecla numérica.
+Añade un objeto al array `EFFECTS` en `js/shaders.js` con `name`, `desc` y `frag` (que defina `vec3 effect()`). Usa `cam(uv)` para leer la imagen de las cámaras, `uPrev` para el frame anterior y `uBass`, `uMid`, `uHigh`, `uBeat` para el audio.
 
 ## Problemas comunes
 
-- **No aparece la cámara**: cierra otras apps que la usen (Zoom, OBS, la app de DJI) y pulsa Iniciar otra vez.
-- **El proyector se ve negro o congelado**: no minimices la ventana de control, porque el navegador pausa el render.
-- **Va lento**: baja la "Resolución de salida" a 1280×720. Comprueba también que Chrome usa la GPU: en `chrome://gpu`, "WebGL2" tiene que salir como *Hardware accelerated*.
-- **No reacciona a la música**: mira los medidores. Si no se mueven, revisa la entrada de audio. Si se mueven poco, sube la Sensibilidad.
+- **Una cámara sale en rojo**: ciérrala en otras apps (Zoom, OBS, DJI Mimo), baja a 720p o cámbiala de puerto USB, y pulsa "Reconectar".
+- **El proyector se ve negro o congelado**: no minimices la ventana de control.
+- **Va lento**: baja la "Resolución de salida" a 1280×720 o usa menos cámaras. En `chrome://gpu`, "WebGL2" tiene que salir como *Hardware accelerated*.
+- **No reacciona a la música**: mira los medidores. Si no se mueven, revisa el micrófono elegido. Si se mueven poco, sube la Sensibilidad.

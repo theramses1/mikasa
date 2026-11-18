@@ -73,6 +73,17 @@ class AudioEngine {
     this.label = file.name;
   }
 
+  get hasFile() { return !!this.mediaEl; }
+  get paused() { return !this.mediaEl || this.mediaEl.paused; }
+
+  // Pausa / reanuda la canción de prueba. Devuelve true si queda sonando.
+  togglePause() {
+    if (!this.mediaEl) return false;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.mediaEl.paused) this.mediaEl.play(); else this.mediaEl.pause();
+    return !this.mediaEl.paused;
+  }
+
   // Golpe manual (tecla T) por si el audio falla.
   tap(now) { this._triggerBeat(now); }
 
