@@ -78,33 +78,67 @@ function drawTestPattern(c, t, v) {
 }
 
 // ---------- Dispositivos ----------
+// La elección del usuario se recuerda por id y por nombre: en Chrome los ids pueden cambiar
+// (sobre todo abriendo index.html como archivo) y la lista puede llegar sin nombres.
+const store = {
+  load() { try { return JSON.parse(localStorage.getItem('visuales.devices') || '{}'); } catch (e) { return {}; } },
+  save() {
+    try {
+      const lab = (sel) => (sel.value ? sel.selectedOptions[0]?.dataset.label || '' : '');
+      localStorage.setItem('visuales.devices', JSON.stringify({
+        cams: [0, 1, 2].map((i) => lab($(`cam${i}`))),
+        mic: lab($('micSelect')),
+      }));
+    } catch (e) { /* almacenamiento no disponible */ }
+  },
+};
+
+function choiceOf(sel) {
+  return { id: sel.value, label: sel.value ? sel.selectedOptions[0]?.dataset.label || '' : '' };
+}
+function restoreChoice(sel, choice) {
+  const opts = [...sel.options].filter((o) => o.value);
+  const hit = opts.find((o) => o.value === choice.id) || (choice.label && opts.find((o) => o.dataset.label === choice.label));
+  sel.value = hit ? hit.value : '';
+}
+function fillSelect(sel, devices, emptyText, nameOf) {
+  const choice = choiceOf(sel);
+  sel.innerHTML = `<option value="">${emptyText}</option>`;
+  devices.forEach((d, k) => {
+    const o = new Option(nameOf(d, k), d.deviceId);
+    o.dataset.label = d.label;
+    sel.add(o);
+  });
+  restoreChoice(sel, choice);
+}
+
+let savedOnce = false;
 async function listDevices() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const cams = devices.filter((d) => d.kind === 'videoinput');
   const mics = devices.filter((d) => d.kind === 'audioinput');
+  // Sin permiso activo Chrome devuelve dispositivos sin id ni nombre: no tocar las listas.
+  if (devices.length && devices.every((d) => !d.deviceId && !d.label)) return { cams, mics, blind: true };
   const camGroups = new Set(cams.map((d) => d.groupId).filter(Boolean));
 
-  for (let i = 0; i < 3; i++) {
-    const sel = $(`cam${i}`);
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">— ninguna —</option>';
-    cams.forEach((d, k) => sel.add(new Option(d.label || `Cámara ${k + 1}`, d.deviceId)));
-    if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
-  }
+  for (let i = 0; i < 3; i++) fillSelect($(`cam${i}`), cams, '— ninguna —', (d, k) => d.label || `Cámara ${k + 1}`);
+  // El micrófono de una cámara USB comparte groupId con su video.
+  fillSelect($('micSelect'), mics, '— sin audio —',
+    (d, k) => `${camGroups.has(d.groupId) ? '🎥' : '💻'} ${d.label || `Micrófono ${k + 1}`}`);
 
-  const msel = $('micSelect');
-  const prevMic = msel.value;
-  msel.innerHTML = '<option value="">— sin audio —</option>';
-  mics.forEach((d, k) => {
-    // El micrófono de una cámara USB comparte groupId con su video.
-    const icon = camGroups.has(d.groupId) ? '🎥' : '💻';
-    msel.add(new Option(`${icon} ${d.label || `Micrófono ${k + 1}`}`, d.deviceId));
-  });
-  if ([...msel.options].some((o) => o.value === prevMic)) msel.value = prevMic;
+  // La primera vez, recuperar lo que se eligió en la sesión anterior.
+  if (!savedOnce && cams.some((d) => d.label)) {
+    savedOnce = true;
+    const saved = store.load();
+    (saved.cams || []).forEach((label, i) => {
+      if (label && !$(`cam${i}`).value) { restoreChoice($(`cam${i}`), { id: '', label }); slots[i].manual = true; }
+    });
+    if (saved.mic && !$('micSelect').value) restoreChoice($('micSelect'), { id: '', label: saved.mic });
+  }
   return { cams, mics };
 }
 
-async function startCamera(slot, deviceId) {
+async function startCamera(slot, deviceId, retried = false) {
   const s = slots[slot];
   if (s.stream) s.stream.getTracks().forEach((t) => t.stop());
   s.stream = null;
@@ -130,6 +164,14 @@ async function startCamera(slot, deviceId) {
     s.info = `${st.width}×${st.height}@${Math.round(st.frameRate || 0)}`;
   } catch (err) {
     console.error(err);
+    // El id de la cámara cambió (Chrome lo renueva a veces): buscarla por su nombre y reintentar.
+    if (!retried && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError')) {
+      const sel = $(`cam${slot}`);
+      const choice = choiceOf(sel);
+      await listDevices();
+      restoreChoice(sel, choice);
+      if (sel.value) return startCamera(slot, sel.value, true);
+    }
     s.error = err.name === 'NotReadableError'
       ? 'no se pudo abrir (¿la usa otra app, o falta ancho de banda USB? prueba 720p u otro puerto)'
       : err.message;
@@ -144,7 +186,7 @@ function autoAssign(cams) {
   const free = cams.filter((c) => !used.has(c.deviceId));
   const assigned = [];
   for (let i = 0; i < 3; i++) {
-    if (!$(`cam${i}`).value && free.length) { $(`cam${i}`).value = free.shift().deviceId; assigned.push(i); }
+    if (!slots[i].manual && !$(`cam${i}`).value && free.length) { $(`cam${i}`).value = free.shift().deviceId; assigned.push(i); }
   }
   return assigned;
 }
@@ -172,21 +214,25 @@ function reportStatus() {
 
 $('startBtn').addEventListener('click', async () => {
   try {
+    let tmp = null;
     if (!state.started) {
       state.started = true;
       // Pedir permiso una vez para que el navegador muestre los nombres de los dispositivos.
-      const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() =>
+      tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() =>
         navigator.mediaDevices.getUserMedia({ video: true }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true })));
-      tmp.getTracks().forEach((t) => t.stop());
-      if (!$('micSelect').options[1]) await listDevices();
-      if (!$('micSelect').value && $('micSelect').options[1]) $('micSelect').selectedIndex = 1;
     }
-    const { cams } = await listDevices();
-    camCount = cams.length;
-    autoAssign(cams);
+    // Listar con el permiso todavía activo; la elección del usuario se conserva.
+    const { cams, blind } = await listDevices();
+    if (tmp) tmp.getTracks().forEach((t) => t.stop());
+    if (!blind) {
+      camCount = cams.length;
+      autoAssign(cams);
+      if (!$('micSelect').value && !state.micManual && $('micSelect').options[1]) $('micSelect').selectedIndex = 1;
+    }
     setStatus('Conectando cámaras…');
     for (let i = 0; i < 3; i++) await startCamera(i, $(`cam${i}`).value);
-    if ($('micSelect').value) { await audio.useDevice($('micSelect').value); updatePlayer(); }
+    if ($('micSelect').value) { await startMic(); }
+    store.save();
     reportStatus();
     $('startBtn').textContent = 'Reconectar / aplicar cambios';
     $('hint').style.display = 'none';
@@ -198,6 +244,8 @@ $('startBtn').addEventListener('click', async () => {
 
 for (let i = 0; i < 3; i++) {
   $(`cam${i}`).addEventListener('change', async () => {
+    slots[i].manual = true;   // respetar la elección (también "ninguna")
+    store.save();
     if (!state.started) return;
     await startCamera(i, $(`cam${i}`).value);
     reportStatus();
@@ -209,21 +257,33 @@ $('camRes').addEventListener('change', async () => {
   reportStatus();
 });
 $('micSelect').addEventListener('change', () => {
-  if (!$('micSelect').value) return;
-  audio.useDevice($('micSelect').value)
-    .then(() => { updatePlayer(); reportStatus(); })
-    .catch((e) => setStatus(`Micrófono: ${e.message}`, true));
+  state.micManual = true;
+  store.save();
+  if (!$('micSelect').value || !state.started) return;
+  startMic().then(reportStatus);
 });
+
+// Abre el micrófono elegido; si su id cambió, lo busca por nombre.
+async function startMic() {
+  const sel = $('micSelect');
+  try {
+    await audio.useDevice(sel.value);
+  } catch (err) {
+    if (err.name !== 'OverconstrainedError' && err.name !== 'NotFoundError') { setStatus(`Micrófono: ${err.message}`, true); return; }
+    const choice = choiceOf(sel);
+    await listDevices();
+    restoreChoice(sel, choice);
+    if (sel.value) await audio.useDevice(sel.value).catch((e) => setStatus(`Micrófono: ${e.message}`, true));
+  }
+  updatePlayer();
+}
 // Cámaras conectadas o desconectadas con la página abierta (p. ej. el teléfono pasa a modo webcam).
 navigator.mediaDevices?.addEventListener?.('devicechange', async () => {
   if (!state.started) return;
-  const { cams } = await listDevices();
+  const { cams, blind } = await listDevices();
+  if (blind) return;
   camCount = cams.length;
-  const ids = new Set(cams.map((c) => c.deviceId));
-  for (let i = 0; i < 3; i++) {
-    const sel = $(`cam${i}`);
-    if (slots[i].stream && !ids.has(slots[i].deviceId)) { await startCamera(i, ''); sel.value = ''; }
-  }
+  // Las desconexiones las detecta el evento 'ended' de cada cámara; aquí solo se suman las nuevas.
   for (const i of autoAssign(cams)) await startCamera(i, $(`cam${i}`).value);
   reportStatus();
 });
@@ -481,3 +541,4 @@ requestAnimationFrame(frame);
 if (!navigator.mediaDevices?.enumerateDevices) {
   setStatus('Este navegador no permite acceder a cámara/micrófono. Abre la página con Chrome o Edge.', true);
 }
+if (location.protocol === 'file:') $('fileTip').hidden = false;
