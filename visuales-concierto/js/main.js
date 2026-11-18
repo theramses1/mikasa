@@ -119,7 +119,12 @@ async function startCamera(slot, deviceId) {
       audio: false,
     });
     s.stream = stream;
+    s.deviceId = deviceId;
     s.video.srcObject = stream;
+    // Si el cable se suelta o el teléfono sale del modo webcam, marcarlo en rojo.
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      if (s.stream === stream) { s.stream = null; s.error = 'se desconectó'; reportStatus(); }
+    });
     await s.video.play();
     const st = stream.getVideoTracks()[0].getSettings();
     s.info = `${st.width}×${st.height}@${Math.round(st.frameRate || 0)}`;
@@ -129,6 +134,19 @@ async function startCamera(slot, deviceId) {
       ? 'no se pudo abrir (¿la usa otra app, o falta ancho de banda USB? prueba 720p u otro puerto)'
       : err.message;
   }
+}
+
+let camCount = -1;
+
+// Pone las cámaras detectadas que no se usan en las ranuras vacías. Devuelve las ranuras asignadas.
+function autoAssign(cams) {
+  const used = new Set([0, 1, 2].map((i) => $(`cam${i}`).value).filter(Boolean));
+  const free = cams.filter((c) => !used.has(c.deviceId));
+  const assigned = [];
+  for (let i = 0; i < 3; i++) {
+    if (!$(`cam${i}`).value && free.length) { $(`cam${i}`).value = free.shift().deviceId; assigned.push(i); }
+  }
+  return assigned;
 }
 
 function setStatus(msg, error = false) {
@@ -143,7 +161,11 @@ function reportStatus() {
     return null;
   }).filter(Boolean);
   const anyErr = slots.some((s) => s.error);
-  if (!parts.length) parts.push('Sin cámaras: modo simulador');
+  if (!parts.length) {
+    parts.push(camCount === 0
+      ? 'El navegador no detecta ninguna cámara (revisa cable, modo Webcam en el teléfono y permisos)'
+      : 'Sin cámaras: modo simulador');
+  }
   parts.push(`Audio: ${audio.label}`);
   setStatus(parts.join(' · '), anyErr);
 }
@@ -156,15 +178,12 @@ $('startBtn').addEventListener('click', async () => {
       const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() =>
         navigator.mediaDevices.getUserMedia({ video: true }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true })));
       tmp.getTracks().forEach((t) => t.stop());
-      const { cams } = await listDevices();
-      // Asignar automáticamente las cámaras detectadas a las ranuras vacías.
-      const used = new Set([0, 1, 2].map((i) => $(`cam${i}`).value).filter(Boolean));
-      const free = cams.filter((c) => !used.has(c.deviceId));
-      for (let i = 0; i < 3; i++) {
-        if (!$(`cam${i}`).value && free.length) $(`cam${i}`).value = free.shift().deviceId;
-      }
+      if (!$('micSelect').options[1]) await listDevices();
       if (!$('micSelect').value && $('micSelect').options[1]) $('micSelect').selectedIndex = 1;
     }
+    const { cams } = await listDevices();
+    camCount = cams.length;
+    autoAssign(cams);
     setStatus('Conectando cámaras…');
     for (let i = 0; i < 3; i++) await startCamera(i, $(`cam${i}`).value);
     if ($('micSelect').value) { await audio.useDevice($('micSelect').value); updatePlayer(); }
@@ -195,7 +214,19 @@ $('micSelect').addEventListener('change', () => {
     .then(() => { updatePlayer(); reportStatus(); })
     .catch((e) => setStatus(`Micrófono: ${e.message}`, true));
 });
-navigator.mediaDevices?.addEventListener?.('devicechange', () => { if (state.started) listDevices(); });
+// Cámaras conectadas o desconectadas con la página abierta (p. ej. el teléfono pasa a modo webcam).
+navigator.mediaDevices?.addEventListener?.('devicechange', async () => {
+  if (!state.started) return;
+  const { cams } = await listDevices();
+  camCount = cams.length;
+  const ids = new Set(cams.map((c) => c.deviceId));
+  for (let i = 0; i < 3; i++) {
+    const sel = $(`cam${i}`);
+    if (slots[i].stream && !ids.has(slots[i].deviceId)) { await startCamera(i, ''); sel.value = ''; }
+  }
+  for (const i of autoAssign(cams)) await startCamera(i, $(`cam${i}`).value);
+  reportStatus();
+});
 
 // ---------- Canción de prueba (simulador) ----------
 function updatePlayer() {
