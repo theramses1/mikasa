@@ -31,6 +31,8 @@ class AudioEngine {
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0.55;
       this.data = new Uint8Array(this.analyser.frequencyBinCount);
+      // Salida silenciosa de la que se graban muestras para identificar la canción.
+      this.recDest = this.ctx.createMediaStreamDestination();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
@@ -57,6 +59,7 @@ class AudioEngine {
     });
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.source.connect(this.analyser);
+    this.source.connect(this.recDest);
     this.label = this.stream.getAudioTracks()[0]?.label || 'entrada de audio';
   }
 
@@ -68,10 +71,14 @@ class AudioEngine {
     this.mediaEl.loop = true;
     this.source = this.ctx.createMediaElementSource(this.mediaEl);
     this.source.connect(this.analyser);
+    this.source.connect(this.recDest);
     this.source.connect(this.ctx.destination);
     this.mediaEl.play();
     this.label = file.name;
   }
+
+  // Stream del audio actual (micrófono o canción) para grabar una muestra.
+  recordStream() { return this.source && this.recDest ? this.recDest.stream : null; }
 
   get hasFile() { return !!this.mediaEl; }
   get paused() { return !this.mediaEl || this.mediaEl.paused; }

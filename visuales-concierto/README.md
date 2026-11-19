@@ -1,6 +1,6 @@
 # Visuales en Vivo: visuales para conciertos que reaccionan al audio
 
-Toma video en vivo de **hasta 3 cámaras USB a la vez** (DJI Osmo Action 5 Pro en modo webcam, smartphones como webcam o cualquier cámara USB). Le aplica **20 efectos** que reaccionan a la música en tiempo real (en la GPU) y manda el resultado al **proyector**.
+Toma video en vivo de **hasta 3 cámaras USB a la vez** (DJI Osmo Action 5 Pro en modo webcam, smartphones como webcam o cualquier cámara USB). Le aplica **20 efectos** que reaccionan a la música en tiempo real (en la GPU) y manda el resultado al **proyector**. También puede **identificar la canción y proyectar su letra sincronizada**.
 
 No hay que instalar nada: es una página web local que se abre en **Google Chrome o Microsoft Edge** (Windows, macOS o Linux).
 
@@ -81,6 +81,46 @@ La auto-ganancia adapta la reacción tanto a un micrófono lejano como a una se�
 
 `⇧` = mantener Shift. También puedes hacer clic en el panel o pasar de efecto con `←` `→`.
 
+## Letras de la canción en la proyección
+
+La app puede **identificar la canción que está sonando**, **buscar su letra** y **mostrarla sincronizada** encima de los visuales.
+
+### Identificar la canción automáticamente
+1. Consigue una clave (api_token) en **audd.io**, el servicio que reconoce la música. Tiene prueba gratis. Pégala en "Clave de AudD": se guarda en este navegador.
+2. Con el micrófono funcionando, pulsa **🎤 Identificar canción** (tecla `I`). La app escucha 10 segundos, identifica la canción y busca la letra en **LRCLIB**, un archivo gratuito de letras.
+3. Si la letra tiene tiempos, sale **sincronizada**: el servicio indica en qué segundo de la canción va, y la app sigue desde ahí.
+4. "Volver a identificar cada 60 s" sirve para que la letra cambie sola entre canciones. Cada intento gasta una consulta de tu clave.
+
+### Buscar la letra a mano (sin clave)
+Escribe "Artista canción" y pulsa **Buscar**. Si hay varias versiones, elige otra en la lista; las marcadas con ✓ tienen tiempos.
+- Con la **canción de prueba** del simulador, la letra se sincroniza sola con el archivo y se detiene al pausar.
+- En **vivo**, pulsa **⏱ Empieza ya** cuando arranque la canción.
+
+### Sincronizar
+| Control | Qué hace |
+|---|---|
+| `K` / `J` | La línea siguiente / anterior empieza **ahora** (corrige el desfase al instante). En letras sin tiempos, pasa de línea. |
+| `.` / `,` | Adelanta o atrasa la letra 0,25 s |
+| ⏱ Empieza ya | La canción empieza en este momento |
+
+En vivo la banda puede ir a otro tempo que la grabación: lo normal es ir corrigiendo con `K` en cada estrofa.
+
+### 5 formas de mostrar la letra (tecla `Y`)
+1. **Karaoke**: la línea se va pintando a medida que se canta y la siguiente aparece debajo.
+2. **Gran centro**: una línea enorme en el centro que aparece, late con el ritmo y desaparece.
+3. **Desplazamiento**: varias líneas como un teleprompter, con la actual resaltada.
+4. **Palabra a palabra**: cada palabra sola y gigante, con la línea completa abajo como guía.
+5. **Palabras dispersas**: las palabras saltan a posiciones y ángulos al azar por la pantalla.
+
+### 5 efectos de texto (tecla `U`)
+1. **Neón**: halo de color que respira con los graves.
+2. **Cromático**: los colores rojo, verde y azul se separan al ritmo.
+3. **Ola**: el texto ondula y cambia de color.
+4. **Glitch**: franjas que se desplazan en cada golpe.
+5. **Video en el texto**: las letras dejan ver las cámaras a través de ellas.
+
+Además, todas las letras llevan una sombra suave para que se lean sobre cualquier imagen. El tamaño se ajusta con el deslizador y `L` las muestra u oculta.
+
 ## Todos los atajos de teclado
 
 | Tecla | Acción |
@@ -93,6 +133,11 @@ La auto-ganancia adapta la reacción tanto a un micrófono lejano como a una se�
 | `N` | Cambio automático de cámara con el ritmo |
 | `A` | Cambio automático de efecto con el ritmo |
 | `P` | Pausar o reanudar la canción de prueba |
+| `I` | Identificar la canción y buscar la letra |
+| `L` | Mostrar u ocultar las letras |
+| `Y` / `U` | Cambiar la forma / el efecto de las letras |
+| `J` / `K` | Línea anterior / siguiente (sincronizar) |
+| `,` / `.` | Atrasar / adelantar la letra 0,25 s |
 | `S` | Strobe: destello en cada golpe |
 | `M` | Espejo horizontal |
 | `B` | Blackout con fundido a negro |
@@ -114,12 +159,17 @@ Audio ─► FFT ─► graves / medios / agudos + detección de golpes ──�
 - `js/audio.js`: análisis de audio. Divide el sonido en graves (20–150 Hz), medios (150 Hz–2 kHz) y agudos (2–10 kHz) con auto-ganancia, detecta los golpes y estima el BPM. También reproduce y pausa la canción de prueba.
 - `js/shaders.js`: el mezclador de cámaras y los 20 efectos en GLSL.
 - `js/renderer.js`: WebGL2. Usa 3 texturas de cámara, un pase de mezcla y dos framebuffers alternos para las estelas.
+- `js/lyrics.js`: identificación (AudD), búsqueda de letras (LRCLIB), sincronización y las 5 formas de mostrar el texto. Los 5 efectos de texto están en el pase final de `js/shaders.js`.
 - `js/main.js`: la interfaz, las cámaras, los atajos y la ventana del proyector.
 
 ### Añadir un efecto nuevo
 Añade un objeto al array `EFFECTS` en `js/shaders.js` con `name`, `desc` y `frag` (que defina `vec3 effect()`). Usa `cam(uv)` para leer la imagen de las cámaras, `uPrev` para el frame anterior y `uBass`, `uMid`, `uHigh`, `uBeat` para el audio.
 
 ## Problemas comunes
+
+- **"No se pudo conectar" al identificar o buscar letras**: estas funciones necesitan internet. La identificación también necesita una clave de AudD válida y con consultas disponibles.
+- **No reconoce la canción**: acerca el micrófono al sonido o usa una entrada de la consola. Las versiones en vivo muy distintas a la grabación cuestan más; búscala a mano.
+- **La letra va adelantada o atrasada**: corrígela con `K`/`J` o con `,`/`.`.
 
 - **Una cámara sale en rojo**: ciérrala en otras apps (Zoom, OBS, DJI Mimo), baja a 720p o cámbiala de puerto USB, y pulsa "Reconectar".
 - **El proyector se ve negro o congelado**: no minimices la ventana de control.

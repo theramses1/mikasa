@@ -79,6 +79,44 @@
     </section>
 
     <section>
+      <h2>Letras <small>L muestra / oculta</small></h2>
+      <p id="lyrSong" class="song">Sin canción</p>
+      <button id="identifyBtn" class="primary">🎤 Identificar canción <kbd>I</kbd></button>
+      <label class="check"><input type="checkbox" id="autoIdentify"> Volver a identificar cada 60 s</label>
+      <p id="lyrStatus" class="status"></p>
+      <label>Clave de AudD (para identificar)
+        <input type="password" id="auddToken" placeholder="pega aquí tu api_token" autocomplete="off">
+      </label>
+      <p class="desc">Se consigue en audd.io (tiene prueba gratis). La búsqueda manual de letras no necesita clave.</p>
+      <div class="row">
+        <input type="text" id="lyrQuery" placeholder="Artista – canción">
+        <button id="lyrSearchBtn" class="inline">Buscar</button>
+      </div>
+      <select id="lyrResults" hidden></select>
+      <label>Forma de mostrarlas <small class="kh">tecla Y</small>
+        <select id="lyrDisplay"></select>
+      </label>
+      <label>Efecto del texto <small class="kh">tecla U</small>
+        <select id="lyrFx"></select>
+      </label>
+      <label>Tamaño <output id="lyrSizeVal"></output>
+        <input type="range" id="lyrSize" min="0.5" max="1.8" step="0.05" value="1">
+      </label>
+      <h2 class="sub">Sincronizar</h2>
+      <div class="sync">
+        <button id="lyrPrev">◀ Línea <kbd>J</kbd></button>
+        <button id="lyrNow">⏱ Empieza ya</button>
+        <button id="lyrNext">Línea ▶ <kbd>K</kbd></button>
+      </div>
+      <div class="sync">
+        <button id="lyrMinus">−0,25 s <kbd>,</kbd></button>
+        <span id="lyrOffset">desfase 0,00 s</span>
+        <button id="lyrPlus">+0,25 s <kbd>.</kbd></button>
+      </div>
+      <label class="check"><input type="checkbox" id="lyrVisible" checked> Mostrar letras en la proyección</label>
+    </section>
+
+    <section>
       <h2>Control</h2>
       <label>Intensidad <output id="intensityVal"></output>
         <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.7">
@@ -132,6 +170,7 @@
   <script src="js/shaders.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/renderer.js"></script>
+  <script src="js/lyrics.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

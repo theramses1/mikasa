@@ -413,6 +413,7 @@ $('tapBtn').addEventListener('click', () => audio.tap(performance.now()));
 $('outRes').addEventListener('change', () => {
   const [w, h] = $('outRes').value.split('x').map(Number);
   renderer.resize(w, h);
+  lyrics.resize(w / 2, h / 2);
 });
 
 function nudge(id, delta) {
@@ -427,7 +428,8 @@ function flipCheckbox(id) {
 
 function handleKey(e) {
   const tag = e.target && e.target.tagName;
-  if (tag === 'SELECT' || (tag === 'INPUT' && e.target.type === 'file')) return;
+  // No robar teclas mientras se escribe (búsqueda de letras, clave) o se usa un desplegable.
+  if (tag === 'SELECT' || (tag === 'INPUT' && ['file', 'text', 'password', 'search'].includes(e.target.type))) return;
   const code = e.code || '';
   const k = (e.key || '').toLowerCase();
   if (/^Digit\d$/.test(code)) {
@@ -447,6 +449,14 @@ function handleKey(e) {
   else if (k === 's') toggle('strobe');
   else if (k === 'm') toggle('mirror');
   else if (k === 'b') toggle('blackout');
+  else if (k === 'l') flipCheckbox('lyrVisible');
+  else if (k === 'y') cycleSelect('lyrDisplay');
+  else if (k === 'u') cycleSelect('lyrFx');
+  else if (k === 'i') identifySong();
+  else if (k === 'j') lyrics.step(-1, performance.now());
+  else if (k === 'k') lyrics.step(1, performance.now());
+  else if (k === ',') lyrics.nudge(-0.25);
+  else if (k === '.') lyrics.nudge(0.25);
   else if (k === 't') audio.tap(performance.now());
   else if (k === 'h') document.body.classList.toggle('ui-hidden');
   else if (k === 'f') toggleFullscreen();
@@ -534,6 +544,11 @@ function frame(now) {
   state.master += (target - state.master) * Math.min(1, dt * 6);
 
   const b = audio.bands;
+  // Capa de letras: solo se sube a la GPU si hay algo que mostrar.
+  const lyrOn = lyrics.draw(now, audio.beat);
+  if (lyrOn) renderer.uploadLyrics(lyrics.canvas);
+  if (frames % 6 === 0) $('lyrOffset').textContent = `desfase ${lyrics.offset >= 0 ? '+' : ''}${lyrics.offset.toFixed(2).replace('.', ',')} s`;
+
   renderer.render(state.effect, {
     time,
     bass: b.bass, mid: b.mid, high: b.high, level: b.level,
@@ -542,6 +557,8 @@ function frame(now) {
     hue: state.hue,
     master: state.master,
     flash: state.strobe ? Math.pow(audio.beat, 3) * 0.9 : 0,
+    lyrOn,
+    lyrFx: lyrics.effect,
   }, {
     order, sel: state.sel, prevSel: state.prevSel, fade: state.fade, mode: state.layout, mirror: state.mirror,
   });
@@ -582,3 +599,97 @@ if (location.protocol === 'file:') $('fileTip').hidden = false;
     if (q.state === 'granted') await listDevices();
   } catch (e) { /* el navegador no permite consultarlo */ }
 })();
+
+// ---------- Letras ----------
+const lyrics = new LyricsEngine(audio, canvas.width / 2, canvas.height / 2);
+
+function cycleSelect(id) {
+  const sel = $(id);
+  sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length;
+  sel.dispatchEvent(new Event('change'));
+}
+LYRIC_DISPLAYS.forEach((name, i) => $('lyrDisplay').add(new Option(`${i + 1}. ${name}`, i)));
+LYRIC_EFFECTS.forEach((name, i) => $('lyrFx').add(new Option(`${i + 1}. ${name}`, i)));
+$('lyrDisplay').addEventListener('change', (e) => (lyrics.display = Number(e.target.value)));
+$('lyrFx').addEventListener('change', (e) => (lyrics.effect = Number(e.target.value)));
+$('lyrVisible').addEventListener('change', (e) => (lyrics.visible = e.target.checked));
+bindRange('lyrSize', 'lyrSizeVal', (v) => (lyrics.size = v));
+
+function lyrStatus(msg, error = false) {
+  $('lyrStatus').textContent = msg;
+  $('lyrStatus').classList.toggle('error', error);
+}
+function showSong() {
+  $('lyrSong').textContent = lyrics.title ? `🎵 ${lyrics.title}` : 'Sin canción';
+}
+
+// Clave de AudD guardada en este navegador.
+try { $('auddToken').value = localStorage.getItem('visuales.auddToken') || ''; } catch (e) { /* sin almacenamiento */ }
+$('auddToken').addEventListener('change', () => {
+  try { localStorage.setItem('visuales.auddToken', $('auddToken').value.trim()); } catch (e) { /* sin almacenamiento */ }
+});
+
+async function identifySong() {
+  if (lyrics.busy) return;
+  $('identifyBtn').disabled = true;
+  try {
+    const r = await lyrics.identify($('auddToken').value.trim(), (m) => lyrStatus(m));
+    if (!r) return;
+    if (!r.found) { lyrStatus('No se reconoció la canción. Prueba de nuevo más cerca del sonido, o búscala a mano.', true); return; }
+    showSong();
+    if (!r.hasLyrics) lyrStatus(`Identificada, pero no hay letra disponible para «${r.title}».`, true);
+    else lyrStatus(r.synced ? '✓ Letra sincronizada' : '✓ Letra sin tiempos: avanza las líneas con K / J');
+  } catch (err) {
+    console.error(err);
+    lyrStatus(err.message, true);
+  } finally {
+    $('identifyBtn').disabled = false;
+  }
+}
+$('identifyBtn').addEventListener('click', identifySong);
+
+let autoIdTimer = null;
+$('autoIdentify').addEventListener('change', (e) => {
+  clearInterval(autoIdTimer);
+  autoIdTimer = e.target.checked ? setInterval(identifySong, 60000) : null;
+  if (e.target.checked) identifySong();
+});
+
+// Búsqueda manual
+let lyrResults = [];
+async function searchLyrics() {
+  const q = $('lyrQuery').value.trim();
+  if (!q) return;
+  lyrStatus('🔎 Buscando letra…');
+  try {
+    lyrResults = (await lyrics.search(q)).slice(0, 15);
+    const sel = $('lyrResults');
+    sel.innerHTML = '';
+    lyrResults.forEach((t, i) => sel.add(new Option(
+      `${t.artistName} — ${t.trackName}${t.syncedLyrics ? ' ✓ sincronizada' : t.plainLyrics ? ' (solo texto)' : ' (sin letra)'}`, i)));
+    sel.hidden = !lyrResults.length;
+    if (!lyrResults.length) { lyrStatus('No se encontró ninguna letra con esa búsqueda.', true); return; }
+    loadResult(0);
+  } catch (err) {
+    lyrStatus(err.message, true);
+  }
+}
+function loadResult(i) {
+  const t = lyrResults[i];
+  if (!t) return;
+  lyrics.load(t);
+  showSong();
+  if (lyrics.fromFile) lyrStatus('✓ Letra cargada y sincronizada con la canción de prueba');
+  else if (lyrics.synced) lyrStatus('✓ Letra cargada. Pulsa ⏱ "Empieza ya" cuando arranque la canción, y ajusta con J / K');
+  else lyrStatus('✓ Letra sin tiempos: avanza las líneas con K / J');
+}
+$('lyrSearchBtn').addEventListener('click', searchLyrics);
+$('lyrQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchLyrics(); });
+$('lyrResults').addEventListener('change', (e) => loadResult(Number(e.target.value)));
+
+// Sincronización manual
+$('lyrNow').addEventListener('click', () => { lyrics.startNow(performance.now()); lyrStatus('⏱ Letra sincronizada desde el inicio'); });
+$('lyrPrev').addEventListener('click', () => lyrics.step(-1, performance.now()));
+$('lyrNext').addEventListener('click', () => lyrics.step(1, performance.now()));
+$('lyrMinus').addEventListener('click', () => lyrics.nudge(-0.25));
+$('lyrPlus').addEventListener('click', () => lyrics.nudge(0.25));

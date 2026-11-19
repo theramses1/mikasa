@@ -34,6 +34,12 @@ class Renderer {
       this.camRes.push([16, 9]);
     }
 
+    // Capa de letras (canvas 2D transparente).
+    this.lyrTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.lyrTex);
+    this._texParams();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+
     this.fbos = [];
     this.comp = null;
     this.read = 0;
@@ -113,6 +119,14 @@ class Renderer {
     return true;
   }
 
+  uploadLyrics(canvas) {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.lyrTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);   // el canvas 2D tiene el origen arriba
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  }
+
   _draw(fb) {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
@@ -175,9 +189,20 @@ class Renderer {
       const U = this.copy.uniforms;
       gl.useProgram(this.copy.p);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dst.tex);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.lyrTex);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.comp.tex);
       gl.uniform1i(U.uTex, 0);
+      gl.uniform1i(U.uLyr, 1);
+      gl.uniform1i(U.uComp, 2);
+      gl.uniform2f(U.uRes, w, h);
       gl.uniform1f(U.uMaster, u.master);
       gl.uniform1f(U.uFlash, u.flash);
+      gl.uniform1f(U.uLyrOn, u.lyrOn ? 1 : 0);
+      gl.uniform1f(U.uLyrFx, u.lyrFx || 0);
+      gl.uniform1f(U.uTime, u.time);
+      gl.uniform1f(U.uBass, u.bass);
+      gl.uniform1f(U.uBeat, u.beat);
+      gl.uniform1f(U.uHue, u.hue);
       this._draw(null);
     }
 
