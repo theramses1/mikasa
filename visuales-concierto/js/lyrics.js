@@ -21,8 +21,16 @@ function parseLRC(text) {
   }
   return out.sort((a, b) => a.t - b.t);
 }
+// Texto normal: una línea por renglón. Un renglón vacío entre estrofas = pausa (pantalla limpia).
 function parsePlain(text) {
-  return (text || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).map((t, i) => ({ t: i * 4, text: t }));
+  const out = [];
+  for (const raw of (text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line && (!out.length || out[out.length - 1].text === '')) continue;
+    out.push({ t: out.length * 4, text: line });
+  }
+  while (out.length && out[out.length - 1].text === '') out.pop();
+  return out;
 }
 // "01:23" o "1:02:03" -> segundos
 function parseTimecode(tc) {
@@ -56,6 +64,8 @@ class LyricsEngine {
     this.size = 1;
     this.visible = true;
     this.busy = false;
+    // Banda en vivo: las líneas solo cambian cuando el operador avanza (Espacio / clicker).
+    this.manual = true;
   }
 
   resize(w, h) {
@@ -122,7 +132,7 @@ class LyricsEngine {
     this.titleShownAt = performance.now();
     this.duration = (track && track.duration) || 0;
     this.offset = 0;
-    this.manualIdx = 0;
+    this.manualIdx = -1;          // antes de la primera línea: solo el título
     this.manualAt = performance.now();
     this.fromFile = this.audio.hasFile;
     this.songStart = performance.now();
@@ -144,7 +154,7 @@ class LyricsEngine {
     this.fromFile = false;
     this.songStart = now;
     this.offset = 0;
-    this.manualIdx = 0;
+    this.manualIdx = -1;
     this.manualAt = now;
   }
 
@@ -152,8 +162,8 @@ class LyricsEngine {
   // esa línea empiece justo ahora; así se sincroniza a mano con dos o tres pulsaciones.
   step(dir, now) {
     if (!this.lines.length) return;
-    if (!this.synced) {
-      this.manualIdx = Math.max(0, Math.min(this.lines.length - 1, this.manualIdx + dir));
+    if (this.manual || !this.synced) {
+      this.manualIdx = Math.max(-1, Math.min(this.lines.length, this.manualIdx + dir));
       this.manualAt = now;
       return;
     }
@@ -166,9 +176,10 @@ class LyricsEngine {
 
   state(now) {
     const L = this.lines;
-    if (!this.synced) {
+    if (this.manual || !this.synced) {
       const idx = this.manualIdx;
-      const dur = 3.5;
+      // Duración estimada de la línea (para animaciones): la de la letra con tiempos, o 3,5 s.
+      const dur = this.synced && L[idx] && L[idx + 1] ? Math.min(8, Math.max(1.5, L[idx + 1].t - L[idx].t)) : 3.5;
       const p = clamp01((now - this.manualAt) / 1000 / dur);
       return { idx, p, pos: 0, t0: 0, t1: dur, dur, text: L[idx]?.text || '', next: L[idx + 1]?.text || '' };
     }
@@ -223,6 +234,8 @@ class LyricsEngine {
     ctx.textAlign = 'center';
     const fn = [this._karaoke, this._center, this._scroll, this._word, this._scatter][this.display];
     if (st.idx < 0 && this.display !== 2) return drew;      // intro: solo el modo desplazamiento la anticipa
+    if (!st.text && this.display !== 2) return drew;        // pausa / instrumental: pantalla limpia
+    if (st.idx >= this.lines.length) return drew;           // fin de la letra
     fn.call(this, ctx, W, H, st, beat);
     return true;
   }
@@ -231,7 +244,7 @@ class LyricsEngine {
   _karaoke(ctx, W, H, st) {
     const fs = H * 0.075 * this.size;
     ctx.font = this._font(fs);
-    const rows = this._wrap(st.text || '♪', W * 0.86);
+    const rows = this._wrap(st.text, W * 0.86);
     const lh = fs * 1.15;
     const y0 = H * 0.80 - (rows.length - 1) * lh;
     const widths = rows.map((r) => ctx.measureText(r).width);
@@ -271,7 +284,7 @@ class LyricsEngine {
     ctx.translate(W / 2, H / 2);
     ctx.scale(s, s);
     ctx.font = this._font(fs);
-    const rows = this._wrap(st.text || '♪', (W * 0.82) / s);
+    const rows = this._wrap(st.text, (W * 0.82) / s);
     const lh = fs * 1.12;
     ctx.globalAlpha = a;
     ctx.fillStyle = '#fff';
@@ -293,7 +306,8 @@ class LyricsEngine {
       const isCur = k === st.idx;
       const size = isCur ? fs * 1.25 : fs;
       ctx.font = this._font(size);
-      const text = this.lines[k].text || '♪';
+      const text = this.lines[k].text;
+      if (!text) continue;
       const w = ctx.measureText(text).width;
       const sc = Math.min(1, (W * 0.9) / w);
       ctx.save();
@@ -308,7 +322,7 @@ class LyricsEngine {
 
   // 4. Palabra a palabra: cada palabra aparece sola y enorme, con la línea completa abajo como guía.
   _word(ctx, W, H, st, beat) {
-    const words = (st.text || '♪').split(/\s+/).filter(Boolean);
+    const words = (st.text).split(/\s+/).filter(Boolean);
     const n = words.length;
     const wi = Math.min(n - 1, Math.floor(st.p * n));
     const local = st.p * n - wi;
@@ -339,7 +353,7 @@ class LyricsEngine {
 
   // 5. Palabras dispersas: las palabras saltan a posiciones y ángulos al azar por toda la pantalla.
   _scatter(ctx, W, H, st, beat) {
-    const words = (st.text || '♪').split(/\s+/).filter(Boolean);
+    const words = (st.text).split(/\s+/).filter(Boolean);
     const n = words.length;
     const seed = (st.idx + 1) * 97;
     words.forEach((word, k) => {

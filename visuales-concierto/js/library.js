@@ -18,12 +18,36 @@ class SongLibrary {
         req.onerror = () => rej(req.error);
       });
       this.songs = await this._tx('readonly', (s) => s.getAll());
+      this._sort();
       this.persistent = true;
     } catch (e) {
       console.warn('Sin almacenamiento permanente:', e);
       this.db = null;
     }
     return this.songs;
+  }
+
+  // Orden del setlist (campo `order`; las antiguas sin orden van al final por fecha de alta).
+  _sort() {
+    this.songs.sort((a, b) => (a.order ?? 1e9 + (a.id || 0)) - (b.order ?? 1e9 + (b.id || 0)));
+    this.songs.forEach((s, i) => { s.order = i; });
+  }
+
+  async move(id, dir) {
+    const i = this.songs.findIndex((s) => s.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= this.songs.length) return;
+    [this.songs[i], this.songs[j]] = [this.songs[j], this.songs[i]];
+    this.songs.forEach((s, k) => { s.order = k; });
+    await Promise.all([this._save(this.songs[i]), this._save(this.songs[j])]);
+  }
+
+  // Canción sin audio (banda en vivo): solo nombre y letra.
+  async addManual(artist, title, track) {
+    const song = { artist, title, duration: track?.duration || 0, h: new Uint32Array(0), t: new Uint32Array(0),
+      track: track || null, file: null, order: this.songs.length };
+    await this._save(song);
+    this.songs.push(song);
+    return song;
   }
 
   _tx(mode, fn) {
@@ -68,7 +92,7 @@ class SongLibrary {
     await new Promise((r) => setTimeout(r, 0));   // dejar respirar a la interfaz
     const { h, t } = FP.buildIndex(FP.fingerprint(mono));
     const { artist, title } = SongLibrary.parseName(file.name);
-    const song = { artist, title, duration: decoded.duration, h, t, track: null, file: file.name };
+    const song = { artist, title, duration: decoded.duration, h, t, track: null, file: file.name, order: this.songs.length };
     onStep(`Buscando letra de ${artist ? artist + ' – ' : ''}${title}…`);
     try {
       song.track = artist ? await this.lyrics.findLyrics(artist, title) : (await this.lyrics.search(title))[0] || null;
@@ -101,9 +125,10 @@ class SongLibrary {
   // Reconoce una muestra (mono 11 025 Hz). Devuelve { song, pos, score, sure } o null.
   // pos = segundo de la canción en el que TERMINA la muestra.
   identify(mono) {
-    if (!this.songs.length) return null;
+    const withAudio = this.songs.filter((s) => s.h && s.h.length);
+    if (!withAudio.length) return null;
     const q = FP.fingerprint(mono);
-    const r = FP.match(q, this.songs);
+    const r = FP.match(q, withAudio);
     const best = r[0], second = r[1] || { score: 0 };
     if (!best || best.score < 6 || best.score < 1.5 * Math.max(1, second.score)) return null;
     const song = this.songs.find((s) => s.id === best.id);

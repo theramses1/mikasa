@@ -83,7 +83,35 @@ La auto-ganancia adapta la reacción tanto a un micrófono lejano como a una se�
 
 ## Letras de la canción en la proyección
 
-La app **reconoce la canción que está sonando**, busca su letra y la **muestra sincronizada** encima de los visuales. Todo es **gratis, sin claves ni suscripciones, y funciona sin internet durante el show**.
+La app muestra la letra de cada canción encima de los visuales. Tiene dos modos, que se eligen en **Letras → Modo**:
+
+- **🎸 Banda en vivo** (predeterminado): un operador avanza la letra **línea a línea** siguiendo al cantante. Es lo más fiable con músicos en directo, porque el tempo y las repeticiones cambian cada noche.
+- **💿 Música grabada**: la app reconoce sola la canción que suena y sincroniza la letra. Sirve para DJ sets, pistas pregrabadas o música entre bandas.
+
+## Modo banda en vivo
+
+### Antes del show: el setlist
+1. Pulsa **➕ Añadir canción**, escribe artista y título y pulsa **🔎** (o Enter). La letra se busca gratis en LRCLIB. Para canciones propias, **pega la letra** en el cuadro.
+2. **Deja una línea en blanco entre estrofas**: durante los instrumentales la pantalla queda limpia, y el operador pasa la pausa con una pulsación.
+3. Ordena el setlist con **↑ ↓**. **✎** edita una canción y **🗑** la quita.
+4. Todo queda guardado en el navegador. Durante el show no hace falta internet.
+
+### Durante el show
+| Tecla | Acción |
+|---|---|
+| `Espacio`, `Enter`, `→`, `AvPág` | Siguiente línea |
+| `←`, `RePág`, `Retroceso` | Línea anterior |
+| `]` o `Shift`+`AvPág` | Siguiente canción del setlist |
+| `[` o `Shift`+`RePág` | Canción anterior |
+| `B` | Pantalla negra |
+
+- **Clicker de presentaciones**: los presentadores inalámbricos de PowerPoint envían `AvPág`/`RePág` (o las flechas), así que sirven tal cual para pasar las líneas desde cualquier sitio. Su botón de "pantalla negra" (`B`) también funciona.
+- **Teleprompter**: el panel muestra la línea anterior, la actual en grande y las dos siguientes. Al final de la letra aparece cuál es la siguiente canción. Así el operador sigue al cantante sin mirar el proyector.
+- Al elegir una canción se proyecta su título. La letra empieza con la primera pulsación.
+- Si la letra tiene tiempos, el efecto karaoke rellena cada línea al ritmo aproximado de la grabación. Las líneas solo cambian cuando pulsas.
+- En este modo las flechas pasan líneas. Los efectos se cambian con los números `1`–`0`.
+
+## Modo música grabada
 
 ### Cómo reconoce las canciones
 Usa un reconocedor propio que funciona dentro del navegador. Sigue la técnica de "huella acústica" de las apps de reconocimiento de música: compara los picos de frecuencia del sonido.
@@ -94,7 +122,7 @@ Usa un reconocedor propio que funciona dentro del navegador. Sigue la técnica d
 > **Importante**: reconoce **grabaciones**, como un DJ set, pistas pregrabadas o música ambiente entre bandas. Una banda tocando **en vivo** suena distinta a la grabación (tempo, arreglos), y ningún sistema de huellas la reconoce bien. Con banda en vivo, elige la canción con ▶ o con `[` `]` y sincroniza con ⏱ y `K`.
 
 ### 1. Preparar el repertorio (antes del show, con internet)
-1. En **Letras → Repertorio** pulsa **➕ Añadir canciones** y elige los audios (mp3, wav, m4a…). Puedes elegir varios a la vez.
+1. En **Letras → Setlist** pulsa **🎵 desde audio** y elige los audios (mp3, wav, m4a…). Puedes elegir varios a la vez.
 2. Con nombres de archivo tipo **"Artista - Título.mp3"**, la app encuentra sola la letra en **LRCLIB**, un archivo de letras gratuito.
 3. Si una canción queda "sin letra", o es propia, pulsa **✎**. Ahí puedes corregir artista y título, buscar de nuevo con **🔎**, o **pegar la letra a mano**. La letra puede ir con tiempos (`[01:23.45] verso`) o en texto normal.
 4. El repertorio queda **guardado en el navegador** y sigue ahí la próxima vez. Para que Chrome lo conserve, abre la app siempre de la misma forma (mejor con `iniciar.bat`).
@@ -138,7 +166,7 @@ Además, todas las letras llevan una sombra suave para que se lean sobre cualqui
 | Tecla | Acción |
 |---|---|
 | `1`–`0`, `Shift`+`1`–`0` | Elegir efecto (1–20) |
-| `←` `→` | Efecto anterior o siguiente |
+| `←` `→` | Efecto anterior o siguiente (en modo banda en vivo pasan las líneas de la letra) |
 | `↑` `↓` | Subir o bajar la intensidad |
 | `Z` `X` `C` | Poner al aire la cámara 1, 2 o 3 |
 | `V` | Cambiar la composición de cámaras |
@@ -146,7 +174,9 @@ Además, todas las letras llevan una sombra suave para que se lean sobre cualqui
 | `A` | Cambio automático de efecto con el ritmo |
 | `P` | Pausar o reanudar la canción de prueba |
 | `I` | Reconocer la canción que suena |
-| `[` / `]` | Canción anterior / siguiente del repertorio |
+| `[` / `]` | Canción anterior / siguiente del setlist |
+| `Espacio` / `Enter` / `→` / `AvPág` | (Modo banda en vivo) siguiente línea de la letra |
+| `←` / `RePág` | (Modo banda en vivo) línea anterior |
 | `L` | Mostrar u ocultar las letras |
 | `Y` / `U` | Cambiar la forma / el efecto de las letras |
 | `J` / `K` | Línea anterior / siguiente (sincronizar) |

@@ -429,9 +429,24 @@ function flipCheckbox(id) {
 function handleKey(e) {
   const tag = e.target && e.target.tagName;
   // No robar teclas mientras se escribe (búsqueda de letras, clave) o se usa un desplegable.
-  if (tag === 'SELECT' || (tag === 'INPUT' && ['file', 'text', 'password', 'search'].includes(e.target.type))) return;
+  if (tag === 'SELECT' || tag === 'TEXTAREA' || (tag === 'INPUT' && ['file', 'text', 'password', 'search'].includes(e.target.type))) return;
+  if ($('songDialog').open) return;   // editando una canción
   const code = e.code || '';
   const k = (e.key || '').toLowerCase();
+  // Banda en vivo: Espacio / Enter / → / AvPág (clickers) avanzan la letra; ← / RePág / Retroceso retroceden.
+  if (state.lyrMode === 'live' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    let dir = 0;
+    if (k === 'pagedown' && e.shiftKey) { stepSong(1); dir = 2; }
+    else if (k === 'pageup' && e.shiftKey) { stepSong(-1); dir = 2; }
+    else if ([' ', 'enter', 'arrowright', 'pagedown'].includes(k)) dir = 1;
+    else if (['arrowleft', 'pageup', 'backspace'].includes(k)) dir = -1;
+    if (dir) {
+      if (dir !== 2) liveStep(dir);
+      e.preventDefault?.();
+      if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+      return;
+    }
+  }
   if (/^Digit\d$/.test(code)) {
     const n = Number(code[5]);
     selectEffect((n === 0 ? 9 : n - 1) + (e.shiftKey ? 10 : 0));
@@ -642,18 +657,24 @@ function renderLibrary() {
   box.innerHTML = '';
   $('libCount').textContent = library.songs.length ? `${library.songs.length} canción(es)` : '';
   if (!library.songs.length) {
-    box.innerHTML = '<p class="empty">Todavía no hay canciones. Añade los audios del repertorio.</p>';
+    box.innerHTML = state.lyrMode === 'live'
+      ? '<p class="empty">Todavía no hay canciones. Pulsa ➕ Añadir canción.</p>'
+      : '<p class="empty">Todavía no hay canciones. Añade los audios del repertorio con 🎵.</p>';
     return;
   }
   library.songs.forEach((s, i) => {
     const row = document.createElement('div');
     row.className = 'song-row' + (s.id === currentSongId ? ' playing' : '');
     row.innerHTML = `<button title="Mostrar su letra ahora">▶</button><span class="name"></span>
-      <span class="badge"></span><button title="Editar nombre y letra">✎</button><button title="Quitar del repertorio">🗑</button>`;
+      <span class="badge"></span><button class="mv" title="Subir en el setlist">↑</button><button class="mv" title="Bajar en el setlist">↓</button>
+      <button title="Editar nombre y letra">✎</button><button title="Quitar del setlist">🗑</button>`;
     row.querySelector('.name').textContent = `${i + 1}. ${songName(s)}`;
-    row.querySelector('.badge').textContent = lyricsBadge(s);
-    const [play, edit, del] = row.querySelectorAll('button');
+    row.querySelector('.name').title = songName(s);
+    row.querySelector('.badge').textContent = lyricsBadge(s) + (s.h && s.h.length ? ' · 🎵' : '');
+    const [play, up, down, edit, del] = row.querySelectorAll('button');
     play.addEventListener('click', () => showSongLyrics(s));
+    up.addEventListener('click', async () => { await library.move(s.id, -1); renderLibrary(); });
+    down.addEventListener('click', async () => { await library.move(s.id, 1); renderLibrary(); });
     edit.addEventListener('click', () => editSong(s));
     del.addEventListener('click', async () => {
       if (!confirm(`¿Quitar «${songName(s)}» del repertorio?`)) return;
@@ -671,6 +692,10 @@ function showSongLyrics(s) {
   lyrics.load(library.trackFor(s));
   showSong();
   renderLibrary();
+  if (state.lyrMode === 'live') {
+    lyrStatus(lyrics.lines.length ? '✓ Lista. Pulsa Espacio (o el clicker) cuando empiece a cantar.' : 'Esta canción no tiene letra: añádela con ✎', !lyrics.lines.length);
+    return;
+  }
   lyrStatus(lyrics.fromFile ? '✓ Letra sincronizada con la canción de prueba'
     : lyrics.synced ? 'Letra cargada desde 0:00. Pulsa 🎤 o ⏱ "Empieza ya" para sincronizar' : 'Letra sin tiempos: avanza con K / J');
 }
@@ -701,8 +726,11 @@ $('libFiles').addEventListener('change', async (e) => {
 
 // Editor de canción: nombre y letra (buscar en LRCLIB o pegar a mano)
 let editing = null;
+let creating = false;
 function editSong(s) {
   editing = s;
+  creating = false;
+  $('dlgHeading').textContent = 'Editar canción';
   $('dlgArtist').value = s.artist || '';
   $('dlgTitle').value = s.title || '';
   const t = s.track || {};
@@ -722,14 +750,39 @@ $('dlgSearch').addEventListener('click', async () => {
     $('dlgStatus').textContent = err.message;
   }
 });
+// Enter en artista / título busca la letra (en vez de cerrar el editor).
+['dlgArtist', 'dlgTitle'].forEach((id) => $(id).addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('dlgSearch').click(); }
+}));
+$('addSongBtn').addEventListener('click', () => {
+  editing = null;
+  creating = true;
+  $('dlgHeading').textContent = 'Nueva canción del setlist';
+  $('dlgArtist').value = '';
+  $('dlgTitle').value = '';
+  $('dlgLyrics').value = '';
+  $('dlgStatus').textContent = 'Escribe artista y título y pulsa 🔎, o pega la letra.';
+  $('songDialog').showModal();
+  $('dlgArtist').focus();
+});
 $('songDialog').addEventListener('close', async () => {
-  if ($('songDialog').returnValue !== 'save' || !editing) return;
-  const s = editing;
-  s.artist = $('dlgArtist').value.trim();
-  s.title = $('dlgTitle').value.trim();
-  const text = $('dlgLyrics').value.trim();
+  if ($('songDialog').returnValue !== 'save' || (!editing && !creating)) return;
+  const artist = $('dlgArtist').value.trim(), title = $('dlgTitle').value.trim();
+  const text = $('dlgLyrics').value.replace(/\s+$/, '');
   const synced = parseLRC(text).length > 0;
-  s.track = text ? { artistName: s.artist, trackName: s.title, syncedLyrics: synced ? text : null, plainLyrics: synced ? null : text } : null;
+  const track = text.trim() ? { artistName: artist, trackName: title, syncedLyrics: synced ? text : null, plainLyrics: synced ? null : text } : null;
+  if (creating) {
+    if (!artist && !title && !track) return;
+    const ns = await library.addManual(artist, title, track);
+    creating = false;
+    renderLibrary();
+    if (!currentSongId) showSongLyrics(ns);
+    return;
+  }
+  const s = editing;
+  s.artist = artist;
+  s.title = title;
+  s.track = track;
   await library.update(s);
   renderLibrary();
   if (s.id === currentSongId) showSongLyrics(s);
@@ -829,3 +882,58 @@ $('lyrPrev').addEventListener('click', () => lyrics.step(-1, performance.now()))
 $('lyrNext').addEventListener('click', () => lyrics.step(1, performance.now()));
 $('lyrMinus').addEventListener('click', () => lyrics.nudge(-0.25));
 $('lyrPlus').addEventListener('click', () => lyrics.nudge(0.25));
+
+// ---------- Modo banda en vivo / música grabada ----------
+function liveStep(dir) {
+  if (!lyrics.lines.length) {
+    if (dir > 0 && library.songs.length) stepSong(1);
+    return;
+  }
+  lyrics.step(dir, performance.now());
+}
+$('liveFwd').addEventListener('click', () => liveStep(1));
+$('liveBack').addEventListener('click', () => liveStep(-1));
+$('liveRestart').addEventListener('click', () => { lyrics.startNow(performance.now()); lyrics.titleShownAt = performance.now(); });
+
+function applyLyrMode(mode) {
+  state.lyrMode = mode;
+  $('lyrMode').value = mode;
+  document.body.classList.toggle('mode-live', mode === 'live');
+  document.body.classList.toggle('mode-rec', mode === 'rec');
+  lyrics.manual = mode === 'live';
+  if (mode === 'live' && $('autoIdentify').checked) { $('autoIdentify').checked = false; $('autoIdentify').dispatchEvent(new Event('change')); }
+  if (mode === 'live') lyrics.manualIdx = -1;
+  try { localStorage.setItem('visuales.lyrMode', mode); } catch (e) { /* sin almacenamiento */ }
+  renderLibrary();
+}
+$('lyrMode').addEventListener('change', (e) => applyLyrMode(e.target.value));
+let savedMode = 'live';
+try { savedMode = localStorage.getItem('visuales.lyrMode') || 'live'; } catch (e) { /* sin almacenamiento */ }
+applyLyrMode(savedMode);
+
+// Teleprompter del operador: se actualiza solo cuando cambia la línea.
+let prompterKey = '';
+function updatePrompter() {
+  if (state.lyrMode !== 'live') return;
+  const L = lyrics.lines;
+  const idx = lyrics.manualIdx;
+  const key = `${lyrics.title}|${idx}|${L.length}`;
+  if (key === prompterKey) return;
+  prompterKey = key;
+  const show = (i) => (i < 0 ? '' : i >= L.length ? '' : L[i].text || '· · · (pausa) · · ·');
+  const nextSong = () => {
+    const i = library.songs.findIndex((x) => x.id === currentSongId);
+    const n = library.songs[i + 1];
+    return n ? `Siguiente canción: ${songName(n)}` : 'Fin del setlist';
+  };
+  let cur;
+  if (!L.length) cur = library.songs.length ? 'Elige una canción del setlist (▶) o pulsa ]' : 'Añade canciones al setlist';
+  else if (idx < 0) cur = '▶ Pulsa Espacio cuando empiece a cantar';
+  else if (idx >= L.length) cur = '✓ Fin de la letra';
+  else cur = show(idx);
+  $('prompter').querySelector('.pr-prev').textContent = show(idx - 1);
+  $('prompter').querySelector('.pr-cur').textContent = cur;
+  $('prompter').querySelector('.pr-next').textContent = idx >= L.length - 1 && L.length ? nextSong() : show(idx + 1);
+  $('prompter').querySelector('.pr-next2').textContent = idx >= L.length - 1 ? '' : show(idx + 2);
+}
+setInterval(updatePrompter, 100);

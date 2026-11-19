@@ -80,16 +80,39 @@
 
     <section>
       <h2>Letras <small>L muestra / oculta</small></h2>
+      <label>Modo
+        <select id="lyrMode">
+          <option value="live">🎸 Banda en vivo: avance manual</option>
+          <option value="rec">💿 Música grabada: reconocimiento automático</option>
+        </select>
+      </label>
       <p id="lyrSong" class="song">Sin canción</p>
-      <button id="identifyBtn" class="primary">🎤 Identificar canción <kbd>I</kbd></button>
-      <label class="check"><input type="checkbox" id="autoIdentify"> Reconocimiento continuo</label>
+
+      <!-- Teleprompter del operador (modo banda en vivo) -->
+      <div id="prompter" class="prompter live-only">
+        <div class="pr-prev"></div>
+        <div class="pr-cur"></div>
+        <div class="pr-next"></div>
+        <div class="pr-next2"></div>
+      </div>
+      <div class="sync live-only">
+        <button id="liveBack">◀ Línea</button>
+        <button id="liveRestart" title="Volver al principio de la canción">⏮ Inicio</button>
+        <button id="liveFwd" class="primary">Línea ▶</button>
+      </div>
+      <p class="desc live-only">Avanza con <kbd>Espacio</kbd>, <kbd>Enter</kbd>, <kbd>→</kbd> o un clicker de presentaciones; retrocede con <kbd>←</kbd>. Canción anterior / siguiente: <kbd>[</kbd> <kbd>]</kbd> o <kbd>RePág</kbd> <kbd>AvPág</kbd> con Shift.</p>
+
+      <button id="identifyBtn" class="primary rec-only">🎤 Identificar canción <kbd>I</kbd></button>
+      <label class="check rec-only"><input type="checkbox" id="autoIdentify"> Reconocimiento continuo</label>
       <p id="lyrStatus" class="status"></p>
 
-      <h2 class="sub">Repertorio <small id="libCount"></small></h2>
-      <p class="desc">Añade los audios de las canciones que van a sonar. La app aprende a reconocerlas y guarda sus letras: gratis, sin claves y sin internet durante el show.</p>
-      <label class="file">➕ Añadir canciones (mp3, wav, m4a…)
-        <input type="file" id="libFiles" accept="audio/*" multiple>
-      </label>
+      <h2 class="sub">Setlist <small id="libCount"></small></h2>
+      <p class="desc live-only">Añade las canciones en el orden del show. Solo hace falta el nombre: la letra se busca sola (o la pegas tú). Una línea en blanco entre estrofas deja la pantalla limpia.</p>
+      <p class="desc rec-only">Añade los audios de las canciones que van a sonar. La app aprende a reconocerlas y guarda sus letras: gratis, sin claves y sin internet durante el show.</p>
+      <div class="row">
+        <button id="addSongBtn" class="inline">➕ Añadir canción</button>
+        <label class="file inline-file">🎵 desde audio<input type="file" id="libFiles" accept="audio/*" multiple></label>
+      </div>
       <div id="libList" class="lib"></div>
 
       <h2 class="sub">Buscar letra a mano</h2>
@@ -107,16 +130,18 @@
       <label>Tamaño <output id="lyrSizeVal"></output>
         <input type="range" id="lyrSize" min="0.5" max="1.8" step="0.05" value="1">
       </label>
-      <h2 class="sub">Sincronizar</h2>
-      <div class="sync">
-        <button id="lyrPrev">◀ Línea <kbd>J</kbd></button>
-        <button id="lyrNow">⏱ Empieza ya</button>
-        <button id="lyrNext">Línea ▶ <kbd>K</kbd></button>
-      </div>
-      <div class="sync">
-        <button id="lyrMinus">−0,25 s <kbd>,</kbd></button>
-        <span id="lyrOffset">desfase 0,00 s</span>
-        <button id="lyrPlus">+0,25 s <kbd>.</kbd></button>
+      <div class="rec-only">
+        <h2 class="sub">Sincronizar</h2>
+        <div class="sync">
+          <button id="lyrPrev">◀ Línea <kbd>J</kbd></button>
+          <button id="lyrNow">⏱ Empieza ya</button>
+          <button id="lyrNext">Línea ▶ <kbd>K</kbd></button>
+        </div>
+        <div class="sync">
+          <button id="lyrMinus">−0,25 s <kbd>,</kbd></button>
+          <span id="lyrOffset">desfase 0,00 s</span>
+          <button id="lyrPlus">+0,25 s <kbd>.</kbd></button>
+        </div>
       </div>
       <label class="check"><input type="checkbox" id="lyrVisible" checked> Mostrar letras en la proyección</label>
     </section>
@@ -174,7 +199,7 @@
 
   <dialog id="songDialog">
     <form method="dialog" class="dlg">
-      <h2>Editar canción</h2>
+      <h2 id="dlgHeading">Editar canción</h2>
       <label>Artista <input type="text" id="dlgArtist"></label>
       <label>Título <input type="text" id="dlgTitle"></label>
       <label>Letra <small>(con tiempos [mm:ss.xx] o texto normal, una línea por renglón)</small>

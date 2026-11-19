@@ -115,3 +115,16 @@ textarea { width: 100%; margin-top: 4px; background: #0e0e15; color: var(--text)
   border-radius: 6px; padding: 8px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
 .dlgBtns { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .dlgBtns button { width: auto; }
+
+/* --- v5: modo banda en vivo --- */
+body.mode-live .rec-only, body.mode-rec .live-only { display: none !important; }
+.prompter { background: #050508; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 6px 0 8px; min-height: 110px; }
+.prompter div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1.3em; }
+.pr-prev { color: #555; font-size: 12px; }
+.pr-cur { color: #fff; font-size: 17px; font-weight: 800; margin: 4px 0; white-space: normal !important; }
+.pr-next { color: var(--accent2); font-size: 13px; }
+.pr-next2 { color: var(--muted); font-size: 12px; }
+.inline-file { width: auto; margin: 0; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.inline-file input { display: none; }
+.row #addSongBtn { flex: 1; }
+.lib .song-row .mv { padding: 3px 4px; }
