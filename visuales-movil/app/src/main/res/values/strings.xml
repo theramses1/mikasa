@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Visuales</string>
+    <string name="flip_camera">Cambiar de cámara</string>
+    <string name="settings">Ajustes</string>
+    <string name="photo">Foto</string>
+    <string name="record">Grabar video</string>
+    <string name="auto">Cambio automático de efecto</string>
+    <string name="intensity">Intensidad</string>
+    <string name="color">Color</string>
+    <string name="sensitivity">Sensibilidad al sonido</string>
+    <string name="auto_every">Cambiar de efecto cada</string>
+    <string name="beats">golpes</string>
+    <string name="beat_flash">Destello en cada golpe</string>
+    <string name="mirror">Espejo</string>
+    <string name="tap_beat">Toca aquí para marcar el ritmo a mano</string>
+    <string name="permissions_needed">La app necesita la cámara y el micrófono para funcionar.</string>
+    <string name="grant">Dar permisos</string>
+    <string name="photo_saved">Foto guardada en Imágenes/Visuales</string>
+    <string name="video_saved">Video guardado en Películas/Visuales</string>
+    <string name="save_failed">No se pudo guardar</string>
+    <string name="no_mic">Sin micrófono: los efectos se mueven solos. Toca el medidor para marcar el ritmo.</string>
+    <string name="hint">Desliza para cambiar de efecto · Toca para ocultar los controles · Doble toque para cambiar de cámara</string>
+</resources>

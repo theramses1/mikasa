@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <android.opengl.GLSurfaceView
+        android:id="@+id/glView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Barra superior -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:id="@+id/meterBox"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_pill"
+            android:contentDescription="@string/tap_beat"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
+            <com.mikasa.visuales.LevelMeterView
+                android:id="@+id/meter"
+                android:layout_width="64dp"
+                android:layout_height="18dp" />
+
+            <TextView
+                android:id="@+id/tvBpm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:minWidth="56dp"
+                android:text="— BPM"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvRec"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/bg_pill"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="6dp"
+            android:text="● 00:00"
+            android:textColor="@color/record"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <ImageButton
+            android:id="@+id/btnFlip"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_round_button"
+            android:contentDescription="@string/flip_camera"
+            android:src="@drawable/ic_flip" />
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/bg_round_button"
+            android:contentDescription="@string/settings"
+            android:src="@drawable/ic_tune" />
+    </LinearLayout>
+
+    <!-- Nombre del efecto (aparece al cambiar y se desvanece) -->
+    <TextView
+        android:id="@+id/tvEffect"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:paddingHorizontal="32dp"
+        android:shadowColor="#CC000000"
+        android:shadowRadius="8"
+        android:textColor="@color/white"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar" />
+
+    <TextView
+        android:id="@+id/tvEffectDesc"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:paddingHorizontal="40dp"
+        android:shadowColor="#CC000000"
+        android:shadowRadius="6"
+        android:textColor="#DDFFFFFF"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvEffect" />
+
+    <!-- Panel de ajustes -->
+    <ScrollView
+        android:id="@+id/settingsPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_panel"
+        android:visibility="gone"
+        app:layout_constrainedHeight="true"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintVertical_bias="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView style="@style/PanelLabel" android:text="@string/intensity" />
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderIntensity"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:value="0.7"
+                android:valueFrom="0"
+                android:valueTo="1"
+                app:labelBehavior="gone" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/color" />
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderHue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:value="0.6"
+                android:valueFrom="0"
+                android:valueTo="1"
+                app:labelBehavior="gone" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/sensitivity" />
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderSens"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:value="1"
+                android:valueFrom="0.3"
+                android:valueTo="2.5"
+                app:labelBehavior="gone" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/auto_every" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/groupAuto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:checkedButton="@id/auto8"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/auto4" style="@style/AutoButton" android:text="4" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/auto8" style="@style/AutoButton" android:text="8" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/auto16" style="@style/AutoButton" android:text="16" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/auto32" style="@style/AutoButton" android:text="32" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchFlash"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/beat_flash"
+                android:textColor="@color/white" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchMirror"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mirror"
+                android:textColor="@color/white" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Barra inferior -->
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/effectList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnPhoto"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/photo"
+                android:src="@drawable/ic_photo" />
+
+            <View
+                android:id="@+id/btnRecord"
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:layout_marginHorizontal="40dp"
+                android:background="@drawable/bg_record"
+                android:clickable="true"
+                android:contentDescription="@string/record"
+                android:focusable="true" />
+
+            <ImageButton
+                android:id="@+id/btnAuto"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_round_button"
+                android:contentDescription="@string/auto"
+                android:src="@drawable/ic_shuffle" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Aviso de permisos -->
+    <LinearLayout
+        android:id="@+id/permissionBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="32dp"
+        android:background="@drawable/bg_panel"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/permissions_needed"
+            android:textColor="@color/white"
+            android:textSize="16sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGrant"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/grant" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

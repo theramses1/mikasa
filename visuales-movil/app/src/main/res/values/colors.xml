@@ -1,0 +1,10 @@
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="accent">#FFFF2D7A</color>
+    <color name="accent_2">#FF7A5CFF</color>
+    <color name="record">#FFFF3B30</color>
+    <color name="scrim">#99000000</color>
+    <color name="chip_idle">#55000000</color>
+    <color name="panel">#E6121218</color>
+</resources>
