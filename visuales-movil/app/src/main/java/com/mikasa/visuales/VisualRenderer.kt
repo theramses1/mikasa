@@ -9,7 +9,9 @@ import android.opengl.EGLSurface
 import android.opengl.GLES11Ext
 import android.opengl.GLES30.*
 import android.opengl.GLSurfaceView
+import android.opengl.GLUtils
 import android.util.Log
+import android.view.Surface
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -24,10 +26,11 @@ import kotlin.math.roundToInt
  * Motor OpenGL ES 3 (equivale a visuales-concierto/js/renderer.js):
  *   1) la cámara llega como textura externa (SurfaceTexture) y se endereza/recorta -> comp,
  *   2) se aplica el efecto con feedback (ping-pong de framebuffers),
- *   3) se dibuja en pantalla y, si se está grabando, también en el codificador de video.
+ *   3) pase final con la capa de letras -> pantalla del celular, video y proyector externo.
  */
 class VisualRenderer(
     private val audio: AudioEngine,
+    private val lyrics: LyricsEngine,
     private val callbacks: Callbacks,
 ) : GLSurfaceView.Renderer {
 
@@ -46,6 +49,8 @@ class VisualRenderer(
     @Volatile var mirror = false
     /** Giro extra de 90° elegido por el usuario (0..3), por si algún celular lo necesita. */
     @Volatile var userRot = 0
+    /** Giro de la pantalla del celular en grados (0, 90, 180, 270). */
+    @Volatile var displayRotation = 0
     @Volatile var beatFlash = false
     @Volatile private var rotQuarter = 1
     @Volatile private var bufW = 1280
@@ -63,6 +68,9 @@ class VisualRenderer(
     }
 
     private class Target(val fb: Int, val tex: Int)
+
+    /** Una salida extra (codificador de video o proyector) dibujada con el mismo contexto. */
+    private class Output(val surface: EGLSurface, val width: Int, val height: Int)
 
     private lateinit var quad: FloatBuffer
     private var compositeProg: Program? = null
@@ -82,6 +90,9 @@ class VisualRenderer(
     private val fbos = arrayOfNulls<Target>(2)
     private var read = 0
     private var halfFloat = false
+    private var lyrTex = 0
+    private var lyrW = 0
+    private var lyrH = 0
 
     private val startNs = System.nanoTime()
 
@@ -90,12 +101,19 @@ class VisualRenderer(
     @Volatile private var pendingRecorder: VideoRecorder? = null
     @Volatile private var stopRequested = false
     private var recorder: VideoRecorder? = null
-    private var encSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var encoder: Output? = null
     private var lastEncNs = 0L
+
+    // Proyector (pantalla externa por HDMI o inalámbrica).
+    private var projector: Output? = null
 
     fun requestPhoto() { photoRequested = true }
     fun startRecording(rec: VideoRecorder) { stopRequested = false; pendingRecorder = rec }
     fun stopRecording() { stopRequested = true }
+
+    /** Tamaño en que se renderiza (para elegir la orientación del video). Hilo cualquiera. */
+    @Volatile var renderAspect = 9f / 16f
+        private set
 
     // ---------------- Ciclo de vida GL ----------------
 
@@ -103,7 +121,8 @@ class VisualRenderer(
         // Contexto nuevo: todo lo anterior ya no existe.
         effectProgs.fill(null)
         comp = null; fbos.fill(null)
-        recorder = null; encSurface = EGL14.EGL_NO_SURFACE
+        recorder = null; encoder = null; projector = null
+        lyrW = 0; lyrH = 0
 
         quad = ByteBuffer.allocateDirect(6 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
             put(floatArrayOf(-1f, -1f, 3f, -1f, -1f, 3f)); position(0)
@@ -117,14 +136,14 @@ class VisualRenderer(
             callbacks.onError(e.message ?: "Error de OpenGL")
         }
 
-        val t = IntArray(1)
-        glGenTextures(1, t, 0)
+        val t = IntArray(2)
+        glGenTextures(2, t, 0)
         oesTex = t[0]
+        lyrTex = t[1]
         glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTex)
-        glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        texParams(GLES11Ext.GL_TEXTURE_EXTERNAL_OES)
+        glBindTexture(GL_TEXTURE_2D, lyrTex)
+        texParams(GL_TEXTURE_2D)
         surfaceTexture?.release()
         val st = SurfaceTexture(oesTex)
         surfaceTexture = st
@@ -133,10 +152,22 @@ class VisualRenderer(
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         screenW = width; screenH = height
-        // Se renderiza con el lado corto a 720 px: buena calidad y fluido en celulares medios.
-        val scale = min(1f, 720f / min(width, height))
-        renderW = (width * scale).roundToInt().coerceAtLeast(2)
-        renderH = (height * scale).roundToInt().coerceAtLeast(2)
+        allocTargets()
+    }
+
+    /**
+     * Se renderiza con el lado corto a 720 px (buena calidad y fluido en celulares medios), con la
+     * forma de la pantalla del celular o, si hay proyector, con la forma del proyector.
+     */
+    private fun allocTargets() {
+        val p = projector
+        val (aw, ah) = if (p != null) p.width to p.height else screenW to screenH
+        val scale = 720f / min(aw, ah)
+        val w = (aw * scale).roundToInt().coerceAtLeast(2)
+        val h = (ah * scale).roundToInt().coerceAtLeast(2)
+        if (w == renderW && h == renderH && comp != null) return
+        renderW = w; renderH = h
+        renderAspect = w.toFloat() / h
         listOfNotNull(comp, *fbos).forEach { deleteTarget(it) }
         comp = target(renderW, renderH, false)
         fbos[0] = target(renderW, renderH, halfFloat)
@@ -148,11 +179,12 @@ class VisualRenderer(
         val st = surfaceTexture ?: return
         val composite = compositeProg ?: return
         val fin = finalProg ?: return
-        val compT = comp ?: return
         try { st.updateTexImage() } catch (e: Exception) { /* la cámara aún no está lista */ }
         st.getTransformMatrix(stMatrix)
 
         handleRecorderRequests()
+        handleProjectorRequests()
+        val compT = comp ?: return
 
         val now = System.nanoTime()
         val time = (now - startNs) / 1e9f
@@ -170,20 +202,7 @@ class VisualRenderer(
         glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTex)
         glUniform1i(composite.u("uCamTex"), 0)
         glUniformMatrix4fv(composite.u("uStMatrix"), 1, false, stMatrix, 0)
-        // La cámara suele escribir su propio giro (y el espejo de la frontal) en la matriz de la
-        // SurfaceTexture. Si ya viene aplicado no hay que volver a girar; si no, se usa el giro
-        // que informa CameraX. Parte lineal de la matriz en coordenadas con el eje Y hacia arriba:
-        //   x = a·s + b·t,  y = -(c·s + d·t)
-        val a = stMatrix[0]; val b = stMatrix[4]; val c = stMatrix[1]; val d = stMatrix[5]
-        val baked = !(a > 0f && d < 0f && abs(b) < abs(a) && abs(c) < abs(d))
-        val bakedSwap = baked && abs(b) > abs(a)          // giro de 90° ya aplicado: ancho y alto cambiados
-        val bakedFlip = (-a * d + b * c) < 0f             // determinante negativo: espejo ya aplicado
-        val rq = ((if (baked) 0 else rotQuarter) + userRot) % 4
-        glUniform1f(composite.u("uRot"), rq.toFloat())
-        glUniform1f(composite.u("uMirror"), if (mirror != bakedFlip) 1f else 0f)
-        val swap = (rq % 2 == 1) != bakedSwap
-        val upright = if (swap) floatArrayOf(bufH.toFloat(), bufW.toFloat()) else floatArrayOf(bufW.toFloat(), bufH.toFloat())
-        glUniform2f(composite.u("uBufRes"), upright[0], upright[1])
+        setCameraOrientation(composite)
         glUniform2f(composite.u("uRes"), renderW.toFloat(), renderH.toFloat())
         draw(compT.fb)
 
@@ -210,42 +229,135 @@ class VisualRenderer(
         }
         val outTex = if (prog != null) dst.tex else compT.tex
 
-        // 3) A pantalla
-        val flash = if (beatFlash) 0.45f * beat.pow(4) * intensity else 0f
+        // 3) Capa de letras (a media resolución, como en la versión web)
+        val lyrOn = uploadLyrics(beat)
+
+        val fp = FinalParams(outTex, compT.tex, lyrOn, time, beat,
+            if (beatFlash) 0.45f * beat.pow(4) * intensity else 0f)
+
+        // 4) A la pantalla del celular: entera, con bandas si la forma no coincide.
         glViewport(0, 0, screenW, screenH)
-        drawFinal(fin, outTex, 1f, 1f, flash)
+        val (cx, cy) = contain(renderW, renderH, screenW, screenH)
+        drawFinal(fin, fp, cx, cy, 0)
 
         if (photoRequested) {
             photoRequested = false
-            capturePhoto()
+            capturePhoto(fin, fp)
         }
 
-        // 4) Al video (máximo 30 fps), recortado a 9:16.
-        recorder?.let { rec ->
-            if (now - lastEncNs >= 30_000_000L) {
-                lastEncNs = now
-                encodeFrame(rec, fin, outTex, flash, now)
-            }
+        // 5) Al proyector: llena la pantalla (recorta lo que sobre).
+        projector?.let { p ->
+            val (sx, sy) = cover(renderW, renderH, p.width, p.height)
+            drawToOutput(p, fin, fp, sx, sy, null)
+        }
+
+        // 6) Al video (máximo 30 fps), recortado al tamaño del video.
+        val rec = recorder
+        val enc = encoder
+        if (rec != null && enc != null && now - lastEncNs >= 30_000_000L) {
+            lastEncNs = now
+            val (sx, sy) = cover(renderW, renderH, enc.width, enc.height)
+            drawToOutput(enc, fin, fp, sx, sy, now - rec.baseNs)
         }
 
         if (prog != null) read = 1 - read
     }
 
-    // ---------------- Grabación ----------------
+    /**
+     * La cámara suele escribir su propio giro (y el espejo de la frontal) en la matriz de la
+     * SurfaceTexture. Si ya viene aplicado solo falta compensar el giro de la pantalla; si no, se
+     * usa el giro que informa CameraX (que ya incluye el de la pantalla).
+     */
+    private fun setCameraOrientation(p: Program) {
+        // Parte lineal de la matriz con el eje Y hacia arriba:  x = a·s + b·t,  y = -(c·s + d·t)
+        val a = stMatrix[0]; val b = stMatrix[4]; val c = stMatrix[1]; val d = stMatrix[5]
+        val baked = !(a > 0f && d < 0f && abs(b) < abs(a) && abs(c) < abs(d))
+        val bakedSwap = baked && abs(b) > abs(a)   // giro de 90° ya aplicado: ancho y alto cambiados
+        val bakedFlip = (-a * d + b * c) < 0f      // determinante negativo: espejo ya aplicado
+        val base = if (baked) ((360 - displayRotation) / 90) % 4 else rotQuarter
+        val rq = (base + userRot) % 4
+        glUniform1f(p.u("uRot"), rq.toFloat())
+        // Espejo deseado en x. Si la imagen ya viene en espejo (horizontal en la imagen derecha),
+        // tras girarla 90° ese espejo queda vertical en pantalla: se compensa en el eje que toque.
+        var fx = mirror
+        var fy = false
+        if (bakedFlip) { if (rq % 2 == 0) fx = !fx else fy = !fy }
+        glUniform2f(p.u("uFlip"), if (fx) 1f else 0f, if (fy) 1f else 0f)
+        val swap = (rq % 2 == 1) != bakedSwap
+        if (swap) glUniform2f(p.u("uBufRes"), bufH.toFloat(), bufW.toFloat())
+        else glUniform2f(p.u("uBufRes"), bufW.toFloat(), bufH.toFloat())
+    }
+
+    private class FinalParams(
+        val tex: Int, val compTex: Int, val lyrOn: Boolean, val time: Float, val beat: Float, val flash: Float,
+    )
+
+    private fun uploadLyrics(beat: Float): Boolean {
+        val w = (renderW / 2).coerceAtLeast(2)
+        val h = (renderH / 2).coerceAtLeast(2)
+        val drew = lyrics.draw(w, h, beat)
+        if (!drew) return false
+        val bmp = lyrics.bitmapFor(w, h)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, lyrTex)
+        if (w != lyrW || h != lyrH) {
+            GLUtils.texImage2D(GL_TEXTURE_2D, 0, bmp, 0)
+            lyrW = w; lyrH = h
+        } else {
+            GLUtils.texSubImage2D(GL_TEXTURE_2D, 0, 0, 0, bmp)
+        }
+        return true
+    }
+
+    // ---------------- Salidas extra (video y proyector) ----------------
+
+    private fun drawToOutput(o: Output, fin: Program, fp: FinalParams, sx: Float, sy: Float, ptsNs: Long?) {
+        val display = EGL14.eglGetCurrentDisplay()
+        val ctx = EGL14.eglGetCurrentContext()
+        val draw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
+        val readS = EGL14.eglGetCurrentSurface(EGL14.EGL_READ)
+        if (!EGL14.eglMakeCurrent(display, o.surface, o.surface, ctx)) {
+            Log.e("VisualRenderer", "eglMakeCurrent (salida extra) falló")
+            return
+        }
+        glViewport(0, 0, o.width, o.height)
+        drawFinal(fin, fp, sx, sy, 0)
+        if (ptsNs != null) EGLExt.eglPresentationTimeANDROID(display, o.surface, ptsNs)
+        EGL14.eglSwapBuffers(display, o.surface)
+        EGL14.eglMakeCurrent(display, draw, readS, ctx)
+    }
+
+    private fun createOutput(surface: Surface, w: Int, h: Int, noVsync: Boolean): Output? {
+        val display = EGL14.eglGetCurrentDisplay()
+        val cfg = currentConfig(display) ?: return null
+        val s = EGL14.eglCreateWindowSurface(display, cfg, surface, intArrayOf(EGL14.EGL_NONE), 0)
+        if (s == null || s == EGL14.EGL_NO_SURFACE) return null
+        if (noVsync) {
+            // Que el proyector no frene a la pantalla del celular esperando su propio refresco.
+            val ctx = EGL14.eglGetCurrentContext()
+            val draw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
+            val readS = EGL14.eglGetCurrentSurface(EGL14.EGL_READ)
+            if (EGL14.eglMakeCurrent(display, s, s, ctx)) {
+                EGL14.eglSwapInterval(display, 0)
+                EGL14.eglMakeCurrent(display, draw, readS, ctx)
+            }
+        }
+        return Output(s, w, h)
+    }
+
+    private fun destroyOutput(o: Output?) {
+        if (o != null) EGL14.eglDestroySurface(EGL14.eglGetCurrentDisplay(), o.surface)
+    }
 
     private fun handleRecorderRequests() {
         pendingRecorder?.let { rec ->
             pendingRecorder = null
-            val display = EGL14.eglGetCurrentDisplay()
-            val cfg = currentConfig(display)
-            val surf = if (cfg != null) {
-                EGL14.eglCreateWindowSurface(display, cfg, rec.inputSurface, intArrayOf(EGL14.EGL_NONE), 0)
-            } else EGL14.EGL_NO_SURFACE
-            if (surf == null || surf == EGL14.EGL_NO_SURFACE) {
+            val out = createOutput(rec.inputSurface, rec.width, rec.height, false)
+            if (out == null) {
                 callbacks.onError("No se pudo preparar la grabación en este dispositivo.")
                 rec.stop()
             } else {
-                encSurface = surf
+                encoder = out
                 recorder = rec
                 lastEncNs = 0L
             }
@@ -254,36 +366,42 @@ class VisualRenderer(
             stopRequested = false
             val rec = recorder ?: return
             recorder = null
-            if (encSurface != EGL14.EGL_NO_SURFACE) {
-                EGL14.eglDestroySurface(EGL14.eglGetCurrentDisplay(), encSurface)
-                encSurface = EGL14.EGL_NO_SURFACE
-            }
+            destroyOutput(encoder)
+            encoder = null
             rec.stop()
         }
     }
 
-    private fun encodeFrame(rec: VideoRecorder, fin: Program, tex: Int, flash: Float, now: Long) {
-        val display = EGL14.eglGetCurrentDisplay()
-        val ctx = EGL14.eglGetCurrentContext()
-        val draw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
-        val readS = EGL14.eglGetCurrentSurface(EGL14.EGL_READ)
-        if (!EGL14.eglMakeCurrent(display, encSurface, encSurface, ctx)) {
-            Log.e("VisualRenderer", "eglMakeCurrent (video) falló")
-            return
-        }
-        glViewport(0, 0, rec.width, rec.height)
-        // Recorte tipo "cover" de la imagen de render al tamaño del video.
-        val ra = renderW.toFloat() / renderH
-        val ta = rec.width.toFloat() / rec.height
-        val sx: Float; val sy: Float
-        if (ta > ra) { sx = 1f; sy = ra / ta } else { sx = ta / ra; sy = 1f }
-        drawFinal(fin, tex, sx, sy, flash)
-        EGLExt.eglPresentationTimeANDROID(display, encSurface, now - rec.baseNs)
-        EGL14.eglSwapBuffers(display, encSurface)
-        EGL14.eglMakeCurrent(display, draw, readS, ctx)
+    // El proyector se conecta y desconecta desde la UI (SurfaceView de la Presentation).
+    private class ProjectorRequest(val surface: Surface?, val w: Int, val h: Int)
+    @Volatile private var projectorRequest: ProjectorRequest? = null
+
+    /** Llamar desde la UI. surface = null para desconectar. */
+    fun setProjectorSurface(surface: Surface?, w: Int, h: Int) {
+        projectorRequest = ProjectorRequest(surface, w, h)
     }
 
-    /** La configuración EGL del contexto actual, para crear la superficie del codificador. */
+    /** Llamar en el hilo de render (queueEvent) antes de que la Surface del proyector se destruya. */
+    fun detachProjectorNow() {
+        projectorRequest = null
+        destroyOutput(projector)
+        projector = null
+        allocTargets()
+    }
+
+    private fun handleProjectorRequests() {
+        val req = projectorRequest ?: run { if (comp == null) allocTargets(); return }
+        projectorRequest = null
+        destroyOutput(projector)
+        projector = null
+        if (req.surface != null && req.surface.isValid) {
+            projector = createOutput(req.surface, req.w, req.h, true)
+            if (projector == null) callbacks.onError("No se pudo usar la pantalla externa.")
+        }
+        allocTargets()
+    }
+
+    /** La configuración EGL del contexto actual, para crear superficies extra. */
     private fun currentConfig(display: android.opengl.EGLDisplay): EGLConfig? {
         val id = IntArray(1)
         EGL14.eglQueryContext(display, EGL14.eglGetCurrentContext(), EGL14.EGL_CONFIG_ID, id, 0)
@@ -297,11 +415,18 @@ class VisualRenderer(
 
     // ---------------- Foto ----------------
 
-    private fun capturePhoto() {
-        val w = screenW; val h = screenH
+    /** La foto se saca de la imagen de render completa (sin bandas negras), con las letras. */
+    private fun capturePhoto(fin: Program, fp: FinalParams) {
+        val w = renderW; val h = renderH
+        val t = target(w, h, false)
+        glViewport(0, 0, w, h)
+        drawFinal(fin, fp, 1f, 1f, t.fb)
         val buf = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder())
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, buf)
+        deleteTarget(t)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glViewport(0, 0, screenW, screenH)
         buf.rewind()
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         bmp.copyPixelsFromBuffer(buf)
@@ -314,13 +439,36 @@ class VisualRenderer(
 
     // ---------------- Utilidades GL ----------------
 
-    private fun drawFinal(fin: Program, tex: Int, sx: Float, sy: Float, flash: Float) {
+    /** Escala para ver la imagen entera (bandas negras si sobra sitio). */
+    private fun contain(rw: Int, rh: Int, tw: Int, th: Int): Pair<Float, Float> {
+        val ra = rw.toFloat() / rh; val ta = tw.toFloat() / th
+        return if (ta > ra) (ta / ra) to 1f else 1f to (ra / ta)
+    }
+
+    /** Escala para llenar la salida (recorta lo que sobre). */
+    private fun cover(rw: Int, rh: Int, tw: Int, th: Int): Pair<Float, Float> {
+        val ra = rw.toFloat() / rh; val ta = tw.toFloat() / th
+        return if (ta > ra) 1f to (ra / ta) else (ta / ra) to 1f
+    }
+
+    private fun drawFinal(fin: Program, fp: FinalParams, sx: Float, sy: Float, fb: Int) {
         glUseProgram(fin.id)
-        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, tex)
+        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, fp.tex)
+        glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, lyrTex)
+        glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, fp.compTex)
         glUniform1i(fin.u("uTex"), 0)
+        glUniform1i(fin.u("uLyr"), 1)
+        glUniform1i(fin.u("uComp"), 2)
         glUniform2f(fin.u("uScale"), sx, sy)
-        glUniform1f(fin.u("uFlash"), flash)
-        draw(0)
+        glUniform2f(fin.u("uRes"), renderW.toFloat(), renderH.toFloat())
+        glUniform1f(fin.u("uFlash"), fp.flash)
+        glUniform1f(fin.u("uLyrOn"), if (fp.lyrOn) 1f else 0f)
+        glUniform1f(fin.u("uLyrFx"), lyrics.effect.toFloat())
+        glUniform1f(fin.u("uTime"), fp.time)
+        glUniform1f(fin.u("uBass"), audio.bass)
+        glUniform1f(fin.u("uBeat"), fp.beat)
+        glUniform1f(fin.u("uHue"), hue)
+        draw(fb)
     }
 
     private fun draw(fb: Int) {
@@ -374,14 +522,18 @@ class VisualRenderer(
         return Program(p)
     }
 
+    private fun texParams(target: Int) {
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+    }
+
     private fun target(w: Int, h: Int, float: Boolean): Target {
         val t = IntArray(1)
         glGenTextures(1, t, 0)
         glBindTexture(GL_TEXTURE_2D, t[0])
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        texParams(GL_TEXTURE_2D)
         if (float) glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, null)
         else glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, null)
         val f = IntArray(1)
@@ -405,7 +557,7 @@ class VisualRenderer(
         glDeleteTextures(1, intArrayOf(t.tex), 0)
     }
 
-    /** Para cuando la actividad se pausa: suelta la cámara y termina una grabación en curso. */
+    /** Para cuando la actividad se pausa: termina una grabación en curso. */
     fun onPauseGl() {
         if (recorder != null) {
             stopRequested = true

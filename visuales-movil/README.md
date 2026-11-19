@@ -1,6 +1,10 @@
 # Visuales Móvil: efectos de cámara que reaccionan a la música (Android)
 
-Versión para celular de [`visuales-concierto`](../visuales-concierto). Usa la **cámara del celular**, escucha la música con el **micrófono** y aplica en tiempo real los **mismos 20 efectos** (en la GPU). Puedes **grabar video con sonido** o **sacar fotos**, que se guardan en la galería.
+Versión para celular de [`visuales-concierto`](../visuales-concierto). Usa la **cámara del celular**, escucha la música con el **micrófono** y aplica en tiempo real los **mismos 20 efectos** (en la GPU). Además:
+
+- **Letras en pantalla**: modo banda en vivo (pasas las líneas tú) o música grabada (la app **reconoce la canción** y sincroniza la letra sola), con 5 formas de mostrarlas y 5 efectos de texto.
+- **Modo proyección**: solo se ve el video, en el celular o en un proyector/TV conectado.
+- **Video con sonido y fotos**, que se guardan en la galería.
 
 ## Instalar
 
@@ -26,9 +30,44 @@ Requisitos: Android 8.0 o superior, con OpenGL ES 3.0 (casi todos los celulares 
 | 📷 | Foto de lo que se ve en pantalla |
 | 🔀 | Cambio automático de efecto al ritmo |
 | Medidor de arriba | Tócalo al ritmo para marcar el tempo a mano |
-| ⚙ Ajustes | Intensidad, color, sensibilidad al sonido, cada cuántos golpes cambia el efecto, destello en los golpes y espejo |
+| 🎵 Letras | Setlist, letras, reconocimiento de canciones y sincronización (ver abajo) |
+| 📡 Proyectar | Pantalla externa o "solo video" en el celular (ver abajo) |
+| ⚙ Ajustes | Intensidad, color, sensibilidad, formato vertical/horizontal, cada cuántos golpes cambia el efecto, destello, espejo y girar imagen |
 
 Fotos y videos se guardan en **Imágenes/Visuales** y **Películas/Visuales**.
+
+## Letras
+
+Pulsa **🎵** para abrir el panel de letras.
+
+### Antes del show: el setlist (con internet)
+- **➕ Canción**: escribe artista y título y pulsa 🔎 para traer la letra gratis de [LRCLIB](https://lrclib.net). Para canciones propias, **pégala** en el cuadro. Deja una línea en blanco entre estrofas: durante los instrumentales la pantalla queda limpia.
+- **🎵 Desde audio**: elige los audios de las canciones (mp3, m4a, wav…). La app saca su **huella acústica** para poder reconocerlas y busca la letra sola si el archivo se llama "Artista - Título".
+- Toca una canción para cargarla. **↑ ↓** cambian el orden y **✎** edita o quita.
+- Todo queda guardado en el celular: durante el show no hace falta internet.
+- **Buscar letra en internet** muestra cualquier letra al momento, sin añadirla al setlist.
+
+### 🎸 Banda en vivo (predeterminado)
+El operador pasa la letra **línea a línea** siguiendo al cantante, en la barra de abajo (teleprompter: línea anterior, actual y siguientes):
+- **▶ ◀** o tocar el texto: siguiente / anterior línea. **⏭ ⏮**: siguiente / anterior canción.
+- **Botones de volumen** del celular: subir = siguiente línea, bajar = anterior.
+- **Clicker de presentaciones** o teclado Bluetooth: `AvPág`/`→`/`Espacio` siguiente, `RePág`/`←` anterior, `Shift`+`AvPág`/`RePág` o `]` `[` cambian de canción.
+
+### 💿 Música grabada
+- **🎤 Identificar** reconoce lo que suena (de las canciones añadidas **desde audio**) y carga la letra en el segundo exacto. **Continuo** escucha cada 5 s y cambia de letra sola.
+- Funciona sin internet y aguanta ruido y eco, pero reconoce **grabaciones** (DJ, pistas, música entre bandas): una banda tocando en vivo suena distinta a la grabación. Con banda en vivo usa el otro modo.
+- Para sincronizar a mano: **⏱ Empieza ya**, **▶ ◀** (esa línea empieza ahora) y **±0,25 s**.
+
+### Cómo se ven
+5 formas (**Karaoke**, **Gran centro**, **Desplazamiento**, **Palabra a palabra**, **Palabras dispersas**) y 5 efectos de texto (**Neón**, **Cromático**, **Ola**, **Glitch**, **Video en el texto**), más el tamaño. Las letras salen en pantalla, en el proyector y en los videos grabados.
+
+## Modo proyección
+
+Pulsa **📡**:
+- **Con un proyector o TV conectado** como pantalla externa (cable USB-C a HDMI, o pantalla inalámbrica si tu celular la ofrece como pantalla extendida): la salida limpia, **solo el video** con efectos y letras, va a esa pantalla a pantalla completa, y el celular se queda con todos los controles. Se activa sola al conectarla.
+- **Sin pantalla externa** ("Solo video en este celular"): se ocultan todos los controles y solo queda el video. Sirve para compartir la pantalla (Smart View, Chromecast…). Las teclas de volumen siguen pasando la letra. Para salir, **mantén pulsado** o pulsa **Atrás**.
+
+Para proyectores y TVs elige **Formato de salida → Horizontal** en Ajustes: la app gira a horizontal y graba los videos en 16:9. Si con el celular de lado la imagen sale girada, usa **Girar imagen 90°**.
 
 ## Los 20 efectos
 
@@ -51,5 +90,11 @@ Cada uno reacciona a los graves, los medios, los agudos y los golpes del bombo, 
 | `VisualRenderer.kt` | Motor OpenGL: cámara (textura externa) → efecto con feedback → pantalla y codificador de video. |
 | `AudioEngine.kt` | Micrófono (AudioRecord) + FFT de 2048 + bandas, auto-ganancia, golpes y BPM (el mismo algoritmo que `audio.js`). |
 | `VideoRecorder.kt` | Grabación MP4 (H.264 + AAC) con MediaCodec y MediaMuxer. |
-| `MainActivity.kt` | Interfaz, permisos, CameraX y gestos. |
+| `Fingerprint.kt` | Reconocedor de canciones por huella acústica (el mismo de `fingerprint.js`) y remuestreo a 11 025 Hz. |
+| `SongLibrary.kt` | El setlist guardado en el celular: letras, huellas y decodificación de los audios. |
+| `Lrclib.kt` | Búsqueda de letras en LRCLIB. |
+| `LyricsEngine.kt` | Sincronización de la letra y las 5 formas de dibujarla (los 5 efectos de texto están en `Shaders.kt`). |
+| `LyricsController.kt` | Panel de letras, teleprompter, reconocimiento y teclas. |
+| `ProjectorPresentation.kt` | La ventana de la pantalla externa (solo video). |
+| `MainActivity.kt` | Interfaz, permisos, CameraX, gestos y modo proyección. |
 | `MediaSaver.kt` | Guarda en la galería. |

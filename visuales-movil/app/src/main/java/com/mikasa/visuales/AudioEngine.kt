@@ -60,6 +60,12 @@ class AudioEngine(private val context: Context) {
     private var thread: Thread? = null
     @Volatile private var stop = false
 
+    // Memoria circular con los últimos 12 s de audio, para reconocer la canción al instante.
+    private val history = FloatArray(SAMPLE_RATE * 12)
+    private var historyPos = 0
+    private var historyFilled = 0
+    private var historyEndNs = 0L
+
     // FFT
     private val ring = FloatArray(FFT_SIZE)
     private var ringPos = 0
@@ -91,6 +97,19 @@ class AudioEngine(private val context: Context) {
 
     /** Golpe manual (doble toque en la barra de audio) por si el micrófono no capta el ritmo. */
     fun tap() = triggerBeat(System.nanoTime())
+
+    /**
+     * Últimos `sec` segundos del micrófono (44 100 Hz) y el instante (System.nanoTime) en que
+     * terminan. null si todavía no hay al menos 3 s.
+     */
+    fun recent(sec: Double): Pair<FloatArray, Long>? = synchronized(history) {
+        val n = minOf(historyFilled, (sec * SAMPLE_RATE).toInt())
+        if (n < SAMPLE_RATE * 3) return null
+        val out = FloatArray(n)
+        val start = (historyPos - n + history.size) % history.size
+        for (i in 0 until n) out[i] = history[(start + i) % history.size]
+        out to historyEndNs
+    }
 
     @SuppressLint("MissingPermission") // se llama solo con el permiso concedido
     fun start(): Boolean {
@@ -133,6 +152,7 @@ class AudioEngine(private val context: Context) {
         thread = null
         record?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
         record = null
+        synchronized(history) { historyFilled = 0 }
         bass = 0f; mid = 0f; high = 0f; level = 0f
     }
 
@@ -144,6 +164,14 @@ class AudioEngine(private val context: Context) {
             val endNs = System.nanoTime()
             val startNs = endNs - n * 1_000_000_000L / SAMPLE_RATE
             pcmListener?.invoke(buf, n, startNs)
+            synchronized(history) {
+                for (i in 0 until n) {
+                    history[historyPos] = buf[i] / 32768f
+                    historyPos = (historyPos + 1) % history.size
+                }
+                historyFilled = minOf(history.size, historyFilled + n)
+                historyEndNs = endNs
+            }
             for (i in 0 until n) {
                 ring[ringPos] = buf[i] / 32768f
                 ringPos = (ringPos + 1) % FFT_SIZE

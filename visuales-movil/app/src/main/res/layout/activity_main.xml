@@ -74,6 +74,24 @@
             android:layout_weight="1" />
 
         <ImageButton
+            android:id="@+id/btnLyrics"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/bg_round_button"
+            android:contentDescription="@string/lyrics"
+            android:src="@drawable/ic_lyrics" />
+
+        <ImageButton
+            android:id="@+id/btnProject"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/bg_round_button"
+            android:contentDescription="@string/project"
+            android:src="@drawable/ic_cast" />
+
+        <ImageButton
             android:id="@+id/btnFlip"
             android:layout_width="44dp"
             android:layout_height="44dp"
@@ -133,7 +151,7 @@
         android:background="@drawable/bg_panel"
         android:visibility="gone"
         app:layout_constrainedHeight="true"
-        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintBottom_toTopOf="@id/teleprompter"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar"
@@ -174,6 +192,22 @@
                 android:valueFrom="0.3"
                 android:valueTo="2.5"
                 app:labelBehavior="gone" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/format" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/groupFormat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:checkedButton="@id/formatVertical"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/formatVertical" style="@style/AutoButton" android:text="@string/vertical" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/formatHorizontal" style="@style/AutoButton" android:text="@string/horizontal" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <TextView style="@style/PanelLabel" android:text="@string/auto_every" />
             <com.google.android.material.button.MaterialButtonToggleGroup
@@ -219,6 +253,215 @@
                 android:text="@string/rotate" />
         </LinearLayout>
     </ScrollView>
+
+    <!-- Panel de letras -->
+    <ScrollView
+        android:id="@+id/lyricsPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_panel"
+        android:visibility="gone"
+        app:layout_constrainedHeight="true"
+        app:layout_constraintBottom_toTopOf="@id/teleprompter"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintVertical_bias="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tvSong"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/no_song"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/groupLyrMode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:checkedButton="@id/modeLive"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/modeLive" style="@style/AutoButton" android:text="@string/mode_live" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/modeRec" style="@style/AutoButton" android:text="@string/mode_rec" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <TextView
+                android:id="@+id/tvModeHelp"
+                style="@style/PanelHelp"
+                android:text="@string/mode_live_help" />
+
+            <LinearLayout
+                android:id="@+id/recBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout style="@style/PanelRow">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnIdentify" style="@style/RowButton" android:text="@string/identify" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchAutoId"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/auto_identify"
+                        android:textColor="@color/white" />
+                </LinearLayout>
+
+                <TextView style="@style/PanelLabel" android:text="@string/sync" />
+                <LinearLayout style="@style/PanelRow">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnStartNow" style="@style/SmallButton" android:text="@string/start_now" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnNudgeMinus" style="@style/SmallButton" android:text="@string/nudge_minus" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnNudgePlus" style="@style/SmallButton" android:text="@string/nudge_plus" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/tvOffset"
+                    style="@style/PanelHelp"
+                    android:text="" />
+            </LinearLayout>
+
+            <TextView style="@style/PanelLabel" android:text="@string/setlist" />
+            <LinearLayout style="@style/PanelRow">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddSong" style="@style/RowButton" android:text="@string/add_song" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddAudio" style="@style/RowButton" android:layout_marginStart="8dp" android:text="@string/add_audio" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/setlistBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/search_lyrics" />
+            <LinearLayout style="@style/PanelRow">
+                <EditText
+                    android:id="@+id/etSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/search_hint"
+                    android:imeOptions="actionSearch"
+                    android:importantForAutofill="no"
+                    android:inputType="text"
+                    android:textColor="@color/white"
+                    android:textColorHint="#88FFFFFF" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSearch" style="@style/SmallButton" android:text="@string/search" />
+            </LinearLayout>
+
+            <TextView style="@style/PanelLabel" android:text="@string/lyr_display" />
+            <Spinner
+                android:id="@+id/spDisplay"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:popupBackground="@color/panel" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/lyr_effect" />
+            <Spinner
+                android:id="@+id/spLyrFx"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:popupBackground="@color/panel" />
+
+            <TextView style="@style/PanelLabel" android:text="@string/lyr_size" />
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderLyrSize"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:value="1"
+                android:valueFrom="0.5"
+                android:valueTo="1.8"
+                app:labelBehavior="gone" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchLyrVisible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/lyr_visible"
+                android:textColor="@color/white" />
+
+            <TextView
+                android:id="@+id/tvLyrStatus"
+                style="@style/PanelHelp"
+                android:text="@string/lyrics_intro" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Teleprompter del operador: pasar líneas y canciones -->
+    <LinearLayout
+        android:id="@+id/teleprompter"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_panel"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView android:id="@+id/btnSongPrev" style="@style/PromptButton" android:contentDescription="@string/song_prev" android:text="⏮" />
+            <TextView android:id="@+id/btnLinePrev" style="@style/PromptButton" android:contentDescription="@string/line_prev" android:text="◀" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/promptText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingHorizontal="8dp">
+            <TextView android:id="@+id/tvPromptPrev" style="@style/PromptSmall" />
+            <TextView
+                android:id="@+id/tvPromptCur"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:maxLines="2"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+            <TextView android:id="@+id/tvPromptNext" style="@style/PromptSmall" />
+            <TextView android:id="@+id/tvPromptNext2" style="@style/PromptSmall" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView android:id="@+id/btnSongNext" style="@style/PromptButton" android:contentDescription="@string/song_next" android:text="⏭" />
+            <TextView android:id="@+id/btnLineNext" style="@style/PromptButton" android:contentDescription="@string/line_next" android:text="▶" />
+        </LinearLayout>
+    </LinearLayout>
 
     <!-- Barra inferior -->
     <LinearLayout

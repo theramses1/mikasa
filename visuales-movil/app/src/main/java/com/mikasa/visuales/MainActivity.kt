@@ -2,7 +2,11 @@ package com.mikasa.visuales
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.hardware.display.DisplayManager
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
@@ -11,13 +15,17 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Display
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -41,6 +49,14 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
     private lateinit var audio: AudioEngine
     private lateinit var renderer: VisualRenderer
     private lateinit var adapter: EffectAdapter
+    private lateinit var lyrics: LyricsEngine
+    private lateinit var lyricsCtl: LyricsController
+
+    private var preview: Preview? = null
+    private var presentation: ProjectorPresentation? = null
+    private var externalWanted = true     // si se conecta una pantalla externa, proyectar en ella
+    private var cleanMode = false
+    private val displayManager by lazy { getSystemService(Context.DISPLAY_SERVICE) as DisplayManager }
 
     private var cameraProvider: ProcessCameraProvider? = null
     private val prefs by lazy { getSharedPreferences("visuales", MODE_PRIVATE) }
@@ -97,7 +113,8 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
 
         audio = AudioEngine(this)
         audio.onBeat = { onBeat() }
-        renderer = VisualRenderer(audio, this)
+        lyrics = LyricsEngine()
+        renderer = VisualRenderer(audio, lyrics, this)
 
         b.glView.setEGLContextClientVersion(3)
         b.glView.setEGLConfigChooser(VisualRenderer.CONFIG_CHOOSER)
@@ -108,6 +125,11 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         b.meter.audio = audio
         setupControls()
         setupGestures()
+        lyricsCtl = LyricsController(this, b, lyrics, audio)
+        lyricsCtl.onActiveChanged = { updateTeleprompterVisibility() }
+        lyricsCtl.setup()
+        setupProjection()
+        applyFormat(prefs.getBoolean("horizontal", false))
         selectEffect(0, scroll = false)
         showHint()
     }
@@ -117,6 +139,8 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         b.glView.onResume()
         onPermissionsChanged(askIfMissing = true)
         b.tvBpm.post(bpmTicker)
+        displayManager.registerDisplayListener(displayListener, null)
+        updateExternalDisplay()
     }
 
     override fun onPause() {
@@ -125,7 +149,45 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         b.glView.onPause()
         audio.stop()
         b.tvBpm.removeCallbacks(bpmTicker)
+        displayManager.unregisterDisplayListener(displayListener)
         super.onPause()
+    }
+
+    override fun onStop() {
+        // La pantalla externa se suelta al salir de la app.
+        presentation?.dismiss()
+        presentation = null
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        lyricsCtl.release()
+        super.onDestroy()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        updateDisplayRotation()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun displayRotation(): Int = windowManager.defaultDisplay.rotation
+
+    /** El giro de la pantalla afecta a cómo hay que enderezar la cámara. */
+    private fun updateDisplayRotation() {
+        val r = displayRotation()
+        renderer.displayRotation = when (r) {
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            Surface.ROTATION_270 -> 270
+            else -> 0
+        }
+        preview?.targetRotation = r
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (lyricsCtl.onKey(keyCode, event)) return true
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -136,7 +198,7 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
     private fun goFullscreen() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.navigationBars())
+            hide(if (cleanMode) WindowInsetsCompat.Type.systemBars() else WindowInsetsCompat.Type.navigationBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         ViewCompat.setOnApplyWindowInsetsListener(b.root) { _, insets ->
@@ -204,6 +266,7 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
                 CameraSelector.DEFAULT_BACK_CAMERA
             }
             val preview = Preview.Builder()
+                .setTargetRotation(displayRotation())
                 .setResolutionSelector(
                     ResolutionSelector.Builder()
                         .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
@@ -211,6 +274,8 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
                 )
                 .build()
             preview.setSurfaceProvider(ContextCompat.getMainExecutor(this)) { request -> onSurfaceRequest(request) }
+            this.preview = preview
+            updateDisplayRotation()
             try {
                 provider.unbindAll()
                 provider.bindToLifecycle(this, selector, preview)
@@ -260,10 +325,11 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         b.effectList.adapter = adapter
 
         b.btnFlip.setOnClickListener { flipCamera() }
-        b.btnSettings.setOnClickListener {
-            val show = b.settingsPanel.visibility != View.VISIBLE
-            b.settingsPanel.visibility = if (show) View.VISIBLE else View.GONE
-            b.btnSettings.isActivated = show
+        b.btnSettings.setOnClickListener { togglePanel(b.settingsPanel) }
+        b.btnLyrics.setOnClickListener { togglePanel(b.lyricsPanel) }
+        b.btnProject.setOnClickListener { onProjectClicked() }
+        b.groupFormat.addOnButtonCheckedListener { _, id, checked ->
+            if (checked) applyFormat(id == R.id.formatHorizontal)
         }
         b.btnPhoto.setOnClickListener {
             ensureStoragePermission()
@@ -324,11 +390,17 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
             }
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (cleanMode) return true
                 setControlsVisible(!controlsVisible)
                 return true
             }
 
+            override fun onLongPress(e: MotionEvent) {
+                if (cleanMode) setCleanMode(false)
+            }
+
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (cleanMode) return true
                 flipCamera()
                 return true
             }
@@ -345,8 +417,131 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
                 if (!controlsVisible) v.visibility = View.INVISIBLE
             }.start()
         }
-        if (!visible) b.settingsPanel.visibility = View.GONE
+        if (!visible) {
+            b.settingsPanel.visibility = View.GONE
+            b.lyricsPanel.visibility = View.GONE
+            b.btnLyrics.isActivated = false
+            b.btnSettings.isActivated = false
+        }
+        updateTeleprompterVisibility()
+    }
+
+    private fun togglePanel(panel: View) {
+        val show = panel.visibility != View.VISIBLE
+        b.settingsPanel.visibility = View.GONE
+        b.lyricsPanel.visibility = View.GONE
+        panel.visibility = if (show) View.VISIBLE else View.GONE
+        b.btnSettings.isActivated = show && panel === b.settingsPanel
+        b.btnLyrics.isActivated = show && panel === b.lyricsPanel
+    }
+
+    private fun updateTeleprompterVisibility() {
+        b.teleprompter.visibility =
+            if (controlsVisible && !cleanMode && lyricsCtl.active) View.VISIBLE else View.GONE
+    }
+
+    // ---------------- Formato y proyección ----------------
+
+    /** Vertical (celular en la mano) u horizontal (proyector, TV, pantalla compartida). */
+    private fun applyFormat(horizontal: Boolean) {
+        prefs.edit().putBoolean("horizontal", horizontal).apply()
+        val target = if (horizontal) R.id.formatHorizontal else R.id.formatVertical
+        if (b.groupFormat.checkedButtonId != target) b.groupFormat.check(target)
+        requestedOrientation = if (horizontal) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) { externalWanted = true; updateExternalDisplay() }
+        override fun onDisplayRemoved(displayId: Int) = updateExternalDisplay()
+        override fun onDisplayChanged(displayId: Int) {}
+    }
+
+    private fun setupProjection() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    cleanMode -> setCleanMode(false)
+                    b.lyricsPanel.visibility == View.VISIBLE || b.settingsPanel.visibility == View.VISIBLE -> {
+                        b.lyricsPanel.visibility = View.GONE; b.settingsPanel.visibility = View.GONE
+                        b.btnLyrics.isActivated = false; b.btnSettings.isActivated = false
+                    }
+                    else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed(); isEnabled = true }
+                }
+            }
+        })
+    }
+
+    private fun externalDisplay(): Display? =
+        displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION).firstOrNull()
+
+    /** Muestra u oculta la ventana de la pantalla externa según lo que haya conectado. */
+    private fun updateExternalDisplay() {
+        val d = externalDisplay()
+        val current = presentation
+        if (current != null && (d == null || !externalWanted || current.display.displayId != d.displayId)) {
+            current.dismiss()
+            presentation = null
+            if (d == null) toast(getString(R.string.projection_stopped))
+        }
+        if (d != null && externalWanted && presentation == null) {
+            try {
+                presentation = ProjectorPresentation(this, d, b.glView, renderer).also { p ->
+                    p.setOnDismissListener { if (presentation === p) presentation = null; b.btnProject.isActivated = false }
+                    p.show()
+                }
+                toast(getString(R.string.projecting_on, d.name))
+            } catch (e: Exception) {
+                presentation = null
+                toast("No se pudo usar la pantalla externa: ${e.message}")
+            }
+        }
+        b.btnProject.isActivated = presentation != null
+    }
+
+    private fun onProjectClicked() {
+        val d = externalDisplay()
+        if (d == null) {
+            setCleanMode(true)
+            return
+        }
+        val external = if (presentation != null) "Dejar de proyectar en ${d.name}" else "Proyectar en ${d.name}"
+        AlertDialog.Builder(this)
+            .setTitle(R.string.project)
+            .setItems(arrayOf(external, "Solo video en este celular")) { _, which ->
+                if (which == 0) {
+                    externalWanted = presentation == null
+                    updateExternalDisplay()
+                } else {
+                    setCleanMode(true)
+                }
+            }
+            .show()
+    }
+
+    /**
+     * Modo proyección en el propio celular: solo se ve el video (para compartir la pantalla en una
+     * TV o proyector). Se sale manteniendo pulsado o con Atrás.
+     */
+    private fun setCleanMode(on: Boolean) {
+        cleanMode = on
+        val ui = listOf(b.topBar, b.bottomBar, b.tvEffect, b.tvEffectDesc)
+        if (on) {
+            b.settingsPanel.visibility = View.GONE
+            b.lyricsPanel.visibility = View.GONE
+            ui.forEach { it.visibility = View.GONE }
+            WindowInsetsControllerCompat(window, window.decorView).hide(WindowInsetsCompat.Type.systemBars())
+            toast(getString(R.string.clean_mode_hint))
+        } else {
+            ui.forEach { it.visibility = View.VISIBLE; it.alpha = 1f }
+            controlsVisible = true
+            b.tvEffect.alpha = 0f; b.tvEffectDesc.alpha = 0f
+            WindowInsetsControllerCompat(window, window.decorView).show(WindowInsetsCompat.Type.statusBars())
+            goFullscreen()
+        }
         b.btnSettings.isActivated = false
+        b.btnLyrics.isActivated = false
+        updateTeleprompterVisibility()
     }
 
     private fun selectEffect(i: Int, scroll: Boolean = true) {
@@ -407,9 +602,10 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
             if (uri == null) f.delete()
             runOnUiThread { toast(getString(if (uri != null) R.string.video_saved else R.string.save_failed)) }
         }
-        // 1080x1920 si el celular lo soporta; si no, 720x1280.
+        // 1080p si el celular lo soporta; si no, 720p. Vertical u horizontal según la imagen.
+        val sizes = if (renderer.renderAspect > 1f) listOf(1920 to 1080, 1280 to 720) else listOf(1080 to 1920, 720 to 1280)
         var rec: VideoRecorder? = null
-        for ((w, h) in listOf(1080 to 1920, 720 to 1280)) {
+        for ((w, h) in sizes) {
             val r = VideoRecorder(file, w, h, withAudio, onFinished)
             try {
                 r.prepare()

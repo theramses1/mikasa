@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Solo Android 8-9 necesita permiso para guardar en la galería. -->
     <uses-permission
@@ -24,7 +25,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
-            android:configChanges="keyboardHidden|screenSize|smallestScreenSize|screenLayout"
+            android:configChanges="orientation|keyboardHidden|keyboard|navigation|screenSize|smallestScreenSize|screenLayout|density|uiMode"
             android:theme="@style/Theme.Visuales">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
