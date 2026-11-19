@@ -43,6 +43,8 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
     private lateinit var adapter: EffectAdapter
 
     private var cameraProvider: ProcessCameraProvider? = null
+    private val prefs by lazy { getSharedPreferences("visuales", MODE_PRIVATE) }
+    private fun rotKey() = if (useFront) "rot_front" else "rot_back"
     private var cameraTexture: SurfaceTexture? = null
     private var useFront = false
 
@@ -215,6 +217,7 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
                 boundFront = useFront
                 renderer.mirror = useFront
                 b.switchMirror.isChecked = useFront
+                renderer.userRot = prefs.getInt(rotKey(), 0)
             } catch (e: Exception) {
                 toast("No se pudo abrir la cámara: ${e.message}")
             }
@@ -296,6 +299,12 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         }
         b.switchFlash.setOnCheckedChangeListener { _, on -> renderer.beatFlash = on }
         b.switchMirror.setOnCheckedChangeListener { _, on -> renderer.mirror = on }
+        b.btnRotate.setOnClickListener {
+            // Respaldo por si en algún celular la imagen sale girada. Se recuerda por cámara.
+            val r = (renderer.userRot + 1) % 4
+            renderer.userRot = r
+            prefs.edit().putInt(rotKey(), r).apply()
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")

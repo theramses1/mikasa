@@ -209,6 +209,14 @@
                 android:layout_height="wrap_content"
                 android:text="@string/mirror"
                 android:textColor="@color/white" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRotate"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/rotate" />
         </LinearLayout>
     </ScrollView>
 

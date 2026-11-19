@@ -15,6 +15,7 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.opengles.GL10
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -41,7 +42,10 @@ class VisualRenderer(
     @Volatile var effectIndex = 0
     @Volatile var intensity = 0.7f
     @Volatile var hue = 0.6f
+    /** true = ver la imagen en espejo (lo normal con la cámara frontal). */
     @Volatile var mirror = false
+    /** Giro extra de 90° elegido por el usuario (0..3), por si algún celular lo necesita. */
+    @Volatile var userRot = 0
     @Volatile var beatFlash = false
     @Volatile private var rotQuarter = 1
     @Volatile private var bufW = 1280
@@ -166,10 +170,19 @@ class VisualRenderer(
         glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTex)
         glUniform1i(composite.u("uCamTex"), 0)
         glUniformMatrix4fv(composite.u("uStMatrix"), 1, false, stMatrix, 0)
-        val rq = rotQuarter
+        // La cámara suele escribir su propio giro (y el espejo de la frontal) en la matriz de la
+        // SurfaceTexture. Si ya viene aplicado no hay que volver a girar; si no, se usa el giro
+        // que informa CameraX. Parte lineal de la matriz en coordenadas con el eje Y hacia arriba:
+        //   x = a·s + b·t,  y = -(c·s + d·t)
+        val a = stMatrix[0]; val b = stMatrix[4]; val c = stMatrix[1]; val d = stMatrix[5]
+        val baked = !(a > 0f && d < 0f && abs(b) < abs(a) && abs(c) < abs(d))
+        val bakedSwap = baked && abs(b) > abs(a)          // giro de 90° ya aplicado: ancho y alto cambiados
+        val bakedFlip = (-a * d + b * c) < 0f             // determinante negativo: espejo ya aplicado
+        val rq = ((if (baked) 0 else rotQuarter) + userRot) % 4
         glUniform1f(composite.u("uRot"), rq.toFloat())
-        glUniform1f(composite.u("uMirror"), if (mirror) 1f else 0f)
-        val upright = if (rq % 2 == 1) floatArrayOf(bufH.toFloat(), bufW.toFloat()) else floatArrayOf(bufW.toFloat(), bufH.toFloat())
+        glUniform1f(composite.u("uMirror"), if (mirror != bakedFlip) 1f else 0f)
+        val swap = (rq % 2 == 1) != bakedSwap
+        val upright = if (swap) floatArrayOf(bufH.toFloat(), bufW.toFloat()) else floatArrayOf(bufW.toFloat(), bufH.toFloat())
         glUniform2f(composite.u("uBufRes"), upright[0], upright[1])
         glUniform2f(composite.u("uRes"), renderW.toFloat(), renderH.toFloat())
         draw(compT.fb)

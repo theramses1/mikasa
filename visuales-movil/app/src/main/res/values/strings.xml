@@ -12,6 +12,7 @@
     <string name="beats">golpes</string>
     <string name="beat_flash">Destello en cada golpe</string>
     <string name="mirror">Espejo</string>
+    <string name="rotate">Girar imagen 90°</string>
     <string name="tap_beat">Toca aquí para marcar el ritmo a mano</string>
     <string name="permissions_needed">La app necesita la cámara y el micrófono para funcionar.</string>
     <string name="grant">Dar permisos</string>
