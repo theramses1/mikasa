@@ -5,9 +5,8 @@ Versión para celular de [`visuales-concierto`](../visuales-concierto). Usa la *
 ## Instalar
 
 **Opción A: descargar el APK ya compilado**
-1. En GitHub, abre la pestaña **Actions** → **Visuales Móvil (APK)** → la ejecución más reciente.
-2. Descarga el artefacto `visuales-movil-apk` (un .zip con el APK dentro).
-3. Pásalo al celular, ábrelo y acepta "instalar apps de origen desconocido".
+1. Descarga el APK desde el enlace directo: https://github.com/theramses1/mikasa/releases/download/visuales-movil-latest/visuales-movil.apk (también está en la pestaña **Releases**).
+2. Ábrelo en el celular (o pásalo desde la computadora), ábrelo y acepta "instalar apps de origen desconocido".
 
 **Opción B: compilarlo tú**
 1. Abre la carpeta `visuales-movil` en Android Studio.

@@ -7,6 +7,9 @@ on:
       - '.github/workflows/visuales-movil.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,8 +30,25 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk visuales-movil.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: visuales-movil-apk
           path: visuales-movil/app/build/outputs/apk/release/*.apk
+
+      # Publica el APK con un enlace de descarga directo y fijo:
+      # https://github.com/<repo>/releases/download/visuales-movil-latest/visuales-movil.apk
+      - name: Publicar en Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: visuales-movil-latest
+          name: Visuales Móvil (última versión)
+          body: |
+            APK de Visuales Móvil compilado desde ${{ github.ref_name }} (${{ github.sha }}).
+            Descarga `visuales-movil.apk`, ábrelo en el celular y permite instalar apps de origen desconocido.
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          files: visuales-movil/visuales-movil.apk
+          overwrite_files: true
