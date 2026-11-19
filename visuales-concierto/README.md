@@ -1,6 +1,6 @@
 # Visuales en Vivo: visuales para conciertos que reaccionan al audio
 
-Toma video en vivo de **hasta 3 cámaras USB a la vez** (DJI Osmo Action 5 Pro en modo webcam, smartphones como webcam o cualquier cámara USB). Le aplica **20 efectos** que reaccionan a la música en tiempo real (en la GPU) y manda el resultado al **proyector**. También puede **identificar la canción y proyectar su letra sincronizada**.
+Toma video en vivo de **hasta 3 cámaras USB a la vez** (DJI Osmo Action 5 Pro en modo webcam, smartphones como webcam o cualquier cámara USB). Le aplica **20 efectos** que reaccionan a la música en tiempo real (en la GPU) y manda el resultado al **proyector**. También puede **reconocer la canción y proyectar su letra sincronizada**, gratis y sin internet.
 
 No hay que instalar nada: es una página web local que se abre en **Google Chrome o Microsoft Edge** (Windows, macOS o Linux).
 
@@ -83,18 +83,30 @@ La auto-ganancia adapta la reacción tanto a un micrófono lejano como a una se�
 
 ## Letras de la canción en la proyección
 
-La app puede **identificar la canción que está sonando**, **buscar su letra** y **mostrarla sincronizada** encima de los visuales.
+La app **reconoce la canción que está sonando**, busca su letra y la **muestra sincronizada** encima de los visuales. Todo es **gratis, sin claves ni suscripciones, y funciona sin internet durante el show**.
 
-### Identificar la canción automáticamente
-1. Consigue una clave (api_token) en **audd.io**, el servicio que reconoce la música. Tiene prueba gratis. Pégala en "Clave de AudD": se guarda en este navegador.
-2. Con el micrófono funcionando, pulsa **🎤 Identificar canción** (tecla `I`). La app escucha 10 segundos, identifica la canción y busca la letra en **LRCLIB**, un archivo gratuito de letras.
-3. Si la letra tiene tiempos, sale **sincronizada**: el servicio indica en qué segundo de la canción va, y la app sigue desde ahí.
-4. "Volver a identificar cada 60 s" sirve para que la letra cambie sola entre canciones. Cada intento gasta una consulta de tu clave.
+### Cómo reconoce las canciones
+Usa un reconocedor propio que funciona dentro del navegador. Sigue la técnica de "huella acústica" de las apps de reconocimiento de música: compara los picos de frecuencia del sonido.
+- **No consulta ninguna base de datos mundial**: reconoce las canciones **de tu repertorio**, las que le enseñas antes del show.
+- Saca **qué canción suena y en qué segundo va**, con los últimos 8 s que ya escuchó, así que responde al instante.
+- Soporta ruido, eco y volumen distinto, como al grabar un altavoz con el micrófono de la laptop.
 
-### Buscar la letra a mano (sin clave)
-Escribe "Artista canción" y pulsa **Buscar**. Si hay varias versiones, elige otra en la lista; las marcadas con ✓ tienen tiempos.
-- Con la **canción de prueba** del simulador, la letra se sincroniza sola con el archivo y se detiene al pausar.
-- En **vivo**, pulsa **⏱ Empieza ya** cuando arranque la canción.
+> **Importante**: reconoce **grabaciones**, como un DJ set, pistas pregrabadas o música ambiente entre bandas. Una banda tocando **en vivo** suena distinta a la grabación (tempo, arreglos), y ningún sistema de huellas la reconoce bien. Con banda en vivo, elige la canción con ▶ o con `[` `]` y sincroniza con ⏱ y `K`.
+
+### 1. Preparar el repertorio (antes del show, con internet)
+1. En **Letras → Repertorio** pulsa **➕ Añadir canciones** y elige los audios (mp3, wav, m4a…). Puedes elegir varios a la vez.
+2. Con nombres de archivo tipo **"Artista - Título.mp3"**, la app encuentra sola la letra en **LRCLIB**, un archivo de letras gratuito.
+3. Si una canción queda "sin letra", o es propia, pulsa **✎**. Ahí puedes corregir artista y título, buscar de nuevo con **🔎**, o **pegar la letra a mano**. La letra puede ir con tiempos (`[01:23.45] verso`) o en texto normal.
+4. El repertorio queda **guardado en el navegador** y sigue ahí la próxima vez. Para que Chrome lo conserve, abre la app siempre de la misma forma (mejor con `iniciar.bat`).
+
+### 2. Durante el show (sin internet)
+- **🎤 Identificar canción** (tecla `I`): reconoce lo que suena y carga la letra en el punto exacto.
+- **Reconocimiento continuo**: escucha cada 5 s y cambia de letra sola al cambiar de canción. No pisa tus correcciones manuales pequeñas.
+- **▶** junto a cada canción, o las teclas `[` `]`, ponen su letra a mano, por ejemplo con banda en vivo.
+- Con la **canción de prueba** del simulador, la letra sigue al archivo y se detiene al pausar.
+
+### Buscar letra a mano
+Escribe "Artista canción" y pulsa **Buscar** para mostrar cualquier letra de LRCLIB, aunque no esté en el repertorio. Necesita internet.
 
 ### Sincronizar
 | Control | Qué hace |
@@ -133,7 +145,8 @@ Además, todas las letras llevan una sombra suave para que se lean sobre cualqui
 | `N` | Cambio automático de cámara con el ritmo |
 | `A` | Cambio automático de efecto con el ritmo |
 | `P` | Pausar o reanudar la canción de prueba |
-| `I` | Identificar la canción y buscar la letra |
+| `I` | Reconocer la canción que suena |
+| `[` / `]` | Canción anterior / siguiente del repertorio |
 | `L` | Mostrar u ocultar las letras |
 | `Y` / `U` | Cambiar la forma / el efecto de las letras |
 | `J` / `K` | Línea anterior / siguiente (sincronizar) |
@@ -159,7 +172,9 @@ Audio ─► FFT ─► graves / medios / agudos + detección de golpes ──�
 - `js/audio.js`: análisis de audio. Divide el sonido en graves (20–150 Hz), medios (150 Hz–2 kHz) y agudos (2–10 kHz) con auto-ganancia, detecta los golpes y estima el BPM. También reproduce y pausa la canción de prueba.
 - `js/shaders.js`: el mezclador de cámaras y los 20 efectos en GLSL.
 - `js/renderer.js`: WebGL2. Usa 3 texturas de cámara, un pase de mezcla y dos framebuffers alternos para las estelas.
-- `js/lyrics.js`: identificación (AudD), búsqueda de letras (LRCLIB), sincronización y las 5 formas de mostrar el texto. Los 5 efectos de texto están en el pase final de `js/shaders.js`.
+- `js/fingerprint.js`: reconocedor de canciones por huella acústica (local).
+- `js/library.js`: el repertorio guardado en el navegador (huellas y letras).
+- `js/lyrics.js`: búsqueda de letras (LRCLIB), sincronización y las 5 formas de mostrar el texto. Los 5 efectos de texto están en el pase final de `js/shaders.js`.
 - `js/main.js`: la interfaz, las cámaras, los atajos y la ventana del proyector.
 
 ### Añadir un efecto nuevo
@@ -167,8 +182,8 @@ Añade un objeto al array `EFFECTS` en `js/shaders.js` con `name`, `desc` y `fra
 
 ## Problemas comunes
 
-- **"No se pudo conectar" al identificar o buscar letras**: estas funciones necesitan internet. La identificación también necesita una clave de AudD válida y con consultas disponibles.
-- **No reconoce la canción**: acerca el micrófono al sonido o usa una entrada de la consola. Las versiones en vivo muy distintas a la grabación cuestan más; búscala a mano.
+- **"No se reconoció la canción"**: comprueba que está en el repertorio y que los medidores de audio se mueven. Acerca el micrófono al altavoz o usa una entrada de la consola. Con banda en vivo es normal: elígela con ▶.
+- **"No se pudo conectar" al buscar letras**: la búsqueda de letras necesita internet. Prepara el repertorio antes del show; durante el show ya no hace falta.
 - **La letra va adelantada o atrasada**: corrígela con `K`/`J` o con `,`/`.`.
 
 - **Una cámara sale en rojo**: ciérrala en otras apps (Zoom, OBS, DJI Mimo), baja a 720p o cámbiala de puerto USB, y pulsa "Reconectar".

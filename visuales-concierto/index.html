@@ -82,12 +82,17 @@
       <h2>Letras <small>L muestra / oculta</small></h2>
       <p id="lyrSong" class="song">Sin canción</p>
       <button id="identifyBtn" class="primary">🎤 Identificar canción <kbd>I</kbd></button>
-      <label class="check"><input type="checkbox" id="autoIdentify"> Volver a identificar cada 60 s</label>
+      <label class="check"><input type="checkbox" id="autoIdentify"> Reconocimiento continuo</label>
       <p id="lyrStatus" class="status"></p>
-      <label>Clave de AudD (para identificar)
-        <input type="password" id="auddToken" placeholder="pega aquí tu api_token" autocomplete="off">
+
+      <h2 class="sub">Repertorio <small id="libCount"></small></h2>
+      <p class="desc">Añade los audios de las canciones que van a sonar. La app aprende a reconocerlas y guarda sus letras: gratis, sin claves y sin internet durante el show.</p>
+      <label class="file">➕ Añadir canciones (mp3, wav, m4a…)
+        <input type="file" id="libFiles" accept="audio/*" multiple>
       </label>
-      <p class="desc">Se consigue en audd.io (tiene prueba gratis). La búsqueda manual de letras no necesita clave.</p>
+      <div id="libList" class="lib"></div>
+
+      <h2 class="sub">Buscar letra a mano</h2>
       <div class="row">
         <input type="text" id="lyrQuery" placeholder="Artista – canción">
         <button id="lyrSearchBtn" class="inline">Buscar</button>
@@ -167,10 +172,29 @@
     </section>
   </aside>
 
+  <dialog id="songDialog">
+    <form method="dialog" class="dlg">
+      <h2>Editar canción</h2>
+      <label>Artista <input type="text" id="dlgArtist"></label>
+      <label>Título <input type="text" id="dlgTitle"></label>
+      <label>Letra <small>(con tiempos [mm:ss.xx] o texto normal, una línea por renglón)</small>
+        <textarea id="dlgLyrics" rows="12" spellcheck="false"></textarea>
+      </label>
+      <p id="dlgStatus" class="status"></p>
+      <div class="dlgBtns">
+        <button type="button" id="dlgSearch">🔎 Buscar letra en internet</button>
+        <button value="cancel">Cancelar</button>
+        <button value="save" id="dlgSave" class="primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="js/shaders.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/lyrics.js"></script>
+  <script src="js/fingerprint.js"></script>
+  <script src="js/library.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

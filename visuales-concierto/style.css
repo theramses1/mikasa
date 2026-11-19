@@ -99,3 +99,19 @@ button.inline { width: auto; margin: 0; flex-shrink: 0; }
 .sync { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; margin-bottom: 6px; }
 .sync button { margin: 0; padding: 7px 4px; font-size: 12px; }
 .sync span { color: var(--muted); font-size: 12px; text-align: center; }
+
+/* --- v4: repertorio --- */
+.lib { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; max-height: 260px; overflow-y: auto; }
+.lib .song-row { display: flex; align-items: center; gap: 6px; background: #0e0e15; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.lib .song-row.playing { border-color: var(--accent2); }
+.lib .song-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.lib .song-row .badge { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.lib .song-row button { width: auto; margin: 0; padding: 3px 6px; font-size: 12px; flex-shrink: 0; }
+.lib .empty { color: var(--muted); font-size: 12px; }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: min(640px, calc(100vw - 32px)); padding: 16px; }
+dialog::backdrop { background: rgba(0,0,0,.6); }
+.dlg h2 { font-size: 14px; color: var(--text); }
+textarea { width: 100%; margin-top: 4px; background: #0e0e15; color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
+.dlgBtns { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.dlgBtns button { width: auto; }

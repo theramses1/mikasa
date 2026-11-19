@@ -452,7 +452,9 @@ function handleKey(e) {
   else if (k === 'l') flipCheckbox('lyrVisible');
   else if (k === 'y') cycleSelect('lyrDisplay');
   else if (k === 'u') cycleSelect('lyrFx');
-  else if (k === 'i') identifySong();
+  else if (k === 'i') identifySong(false);
+  else if (k === '[') stepSong(-1);
+  else if (k === ']') stepSong(1);
   else if (k === 'j') lyrics.step(-1, performance.now());
   else if (k === 'k') lyrics.step(1, performance.now());
   else if (k === ',') lyrics.nudge(-0.25);
@@ -623,36 +625,168 @@ function showSong() {
   $('lyrSong').textContent = lyrics.title ? `🎵 ${lyrics.title}` : 'Sin canción';
 }
 
-// Clave de AudD guardada en este navegador.
-try { $('auddToken').value = localStorage.getItem('visuales.auddToken') || ''; } catch (e) { /* sin almacenamiento */ }
-$('auddToken').addEventListener('change', () => {
-  try { localStorage.setItem('visuales.auddToken', $('auddToken').value.trim()); } catch (e) { /* sin almacenamiento */ }
+// ---------- Repertorio y reconocimiento local ----------
+const library = new SongLibrary(lyrics);
+let currentSongId = null;     // canción del repertorio cuya letra se muestra
+let pending = null;           // coincidencia dudosa esperando confirmación
+
+const songName = (s) => [s.artist, s.title].filter(Boolean).join(' – ') || s.file || 'Sin nombre';
+function lyricsBadge(s) {
+  const t = s.track;
+  if (!t) return 'sin letra';
+  if (t.instrumental) return 'instrumental';
+  return t.syncedLyrics ? '✓ sincronizada' : t.plainLyrics ? 'solo texto' : 'sin letra';
+}
+function renderLibrary() {
+  const box = $('libList');
+  box.innerHTML = '';
+  $('libCount').textContent = library.songs.length ? `${library.songs.length} canción(es)` : '';
+  if (!library.songs.length) {
+    box.innerHTML = '<p class="empty">Todavía no hay canciones. Añade los audios del repertorio.</p>';
+    return;
+  }
+  library.songs.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'song-row' + (s.id === currentSongId ? ' playing' : '');
+    row.innerHTML = `<button title="Mostrar su letra ahora">▶</button><span class="name"></span>
+      <span class="badge"></span><button title="Editar nombre y letra">✎</button><button title="Quitar del repertorio">🗑</button>`;
+    row.querySelector('.name').textContent = `${i + 1}. ${songName(s)}`;
+    row.querySelector('.badge').textContent = lyricsBadge(s);
+    const [play, edit, del] = row.querySelectorAll('button');
+    play.addEventListener('click', () => showSongLyrics(s));
+    edit.addEventListener('click', () => editSong(s));
+    del.addEventListener('click', async () => {
+      if (!confirm(`¿Quitar «${songName(s)}» del repertorio?`)) return;
+      await library.remove(s.id);
+      renderLibrary();
+    });
+    box.appendChild(row);
+  });
+}
+
+// Mostrar la letra de una canción del repertorio a mano (la canción empieza ahora).
+function showSongLyrics(s) {
+  currentSongId = s.id;
+  pending = null;
+  lyrics.load(library.trackFor(s));
+  showSong();
+  renderLibrary();
+  lyrStatus(lyrics.fromFile ? '✓ Letra sincronizada con la canción de prueba'
+    : lyrics.synced ? 'Letra cargada desde 0:00. Pulsa 🎤 o ⏱ "Empieza ya" para sincronizar' : 'Letra sin tiempos: avanza con K / J');
+}
+
+// Repertorio anterior / siguiente (teclas [ y ])
+function stepSong(dir) {
+  if (!library.songs.length) return;
+  const i = library.songs.findIndex((s) => s.id === currentSongId);
+  const next = library.songs[(i + dir + library.songs.length) % library.songs.length];
+  showSongLyrics(next);
+}
+
+$('libFiles').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  for (const [k, f] of files.entries()) {
+    try {
+      await library.addFile(f, (m) => lyrStatus(`(${k + 1}/${files.length}) ${m}`));
+      renderLibrary();
+    } catch (err) {
+      console.error(err);
+      lyrStatus(`No se pudo analizar ${f.name}: ${err.message}`, true);
+    }
+  }
+  const noLyr = library.songs.filter((s) => !s.track).length;
+  lyrStatus(`✓ Repertorio listo${noLyr ? ` · ${noLyr} sin letra: añádela con ✎` : ''}`);
 });
 
-async function identifySong() {
-  if (lyrics.busy) return;
-  $('identifyBtn').disabled = true;
-  try {
-    const r = await lyrics.identify($('auddToken').value.trim(), (m) => lyrStatus(m));
-    if (!r) return;
-    if (!r.found) { lyrStatus('No se reconoció la canción. Prueba de nuevo más cerca del sonido, o búscala a mano.', true); return; }
-    showSong();
-    if (!r.hasLyrics) lyrStatus(`Identificada, pero no hay letra disponible para «${r.title}».`, true);
-    else lyrStatus(r.synced ? '✓ Letra sincronizada' : '✓ Letra sin tiempos: avanza las líneas con K / J');
-  } catch (err) {
-    console.error(err);
-    lyrStatus(err.message, true);
-  } finally {
-    $('identifyBtn').disabled = false;
-  }
+// Editor de canción: nombre y letra (buscar en LRCLIB o pegar a mano)
+let editing = null;
+function editSong(s) {
+  editing = s;
+  $('dlgArtist').value = s.artist || '';
+  $('dlgTitle').value = s.title || '';
+  const t = s.track || {};
+  $('dlgLyrics').value = t.syncedLyrics || t.plainLyrics || '';
+  $('dlgStatus').textContent = '';
+  $('songDialog').showModal();
 }
-$('identifyBtn').addEventListener('click', identifySong);
+$('dlgSearch').addEventListener('click', async () => {
+  const artist = $('dlgArtist').value.trim(), title = $('dlgTitle').value.trim();
+  $('dlgStatus').textContent = '🔎 Buscando…';
+  try {
+    const t = artist ? await lyrics.findLyrics(artist, title) : (await lyrics.search(title))[0];
+    if (!t) { $('dlgStatus').textContent = 'No se encontró letra. Puedes pegarla a mano.'; return; }
+    $('dlgLyrics').value = t.syncedLyrics || t.plainLyrics || '';
+    $('dlgStatus').textContent = t.syncedLyrics ? '✓ Encontrada con tiempos' : '✓ Encontrada (sin tiempos)';
+  } catch (err) {
+    $('dlgStatus').textContent = err.message;
+  }
+});
+$('songDialog').addEventListener('close', async () => {
+  if ($('songDialog').returnValue !== 'save' || !editing) return;
+  const s = editing;
+  s.artist = $('dlgArtist').value.trim();
+  s.title = $('dlgTitle').value.trim();
+  const text = $('dlgLyrics').value.trim();
+  const synced = parseLRC(text).length > 0;
+  s.track = text ? { artistName: s.artist, trackName: s.title, syncedLyrics: synced ? text : null, plainLyrics: synced ? null : text } : null;
+  await library.update(s);
+  renderLibrary();
+  if (s.id === currentSongId) showSongLyrics(s);
+});
+
+// Reconoce lo que suena usando los últimos 8 s de audio.
+async function identifySong(silentIfNone = false) {
+  if (!library.songs.length) { if (!silentIfNone) lyrStatus('Primero añade las canciones del repertorio.', true); return; }
+  const rec = audio.recent(8);
+  if (!rec) { if (!silentIfNone) lyrStatus('Todavía no hay suficiente audio: elige un micrófono (o la canción de prueba) y espera unos segundos.', true); return; }
+  const buf = new AudioBuffer({ length: rec.samples.length, sampleRate: rec.sampleRate, numberOfChannels: 1 });
+  buf.copyToChannel(rec.samples, 0);
+  const mono = await SongLibrary.toMono(buf);
+  const m = library.identify(mono);
+  if (!m) {
+    pending = null;
+    if (!silentIfNone) lyrStatus('No se reconoció la canción. ¿Está en el repertorio? También puedes elegirla con ▶.', true);
+    return;
+  }
+  const posNow = m.pos + (performance.now() - rec.endTime) / 1000;
+  // Coincidencia dudosa: se confirma con una segunda escucha coherente (misma canción, posición que avanza).
+  if (!m.sure) {
+    const ok = pending && pending.id === m.song.id && Math.abs((posNow - pending.pos) - (performance.now() - pending.at) / 1000) < 1;
+    if (!ok) {
+      pending = { id: m.song.id, pos: posNow, at: performance.now() };
+      if (!silentIfNone) lyrStatus(`Parece «${songName(m.song)}»… comprobando (pulsa 🎤 otra vez en unos segundos).`);
+      return;
+    }
+  }
+  pending = null;
+  if (m.song.id === currentSongId && lyrics.lines.length) {
+    const drift = posNow - lyrics.position(performance.now());
+    // En reconocimiento continuo no se pisan las correcciones manuales pequeñas.
+    if (silentIfNone && Math.abs(drift) < 1.5) return;
+    lyrics.resync(m.pos, rec.endTime);
+    lyrStatus(`✓ ${songName(m.song)} · resincronizada (${drift >= 0 ? '+' : ''}${drift.toFixed(1).replace('.', ',')} s)`);
+    return;
+  }
+  currentSongId = m.song.id;
+  lyrics.applyMatch(library.trackFor(m.song), m.pos, rec.endTime);
+  showSong();
+  renderLibrary();
+  const mmss = `${Math.floor(posNow / 60)}:${String(Math.floor(posNow % 60)).padStart(2, '0')}`;
+  lyrStatus(m.song.track ? `✓ ${songName(m.song)} · minuto ${mmss}` : `✓ ${songName(m.song)} · sin letra: añádela con ✎`);
+}
+$('identifyBtn').addEventListener('click', () => identifySong(false));
 
 let autoIdTimer = null;
 $('autoIdentify').addEventListener('change', (e) => {
   clearInterval(autoIdTimer);
-  autoIdTimer = e.target.checked ? setInterval(identifySong, 60000) : null;
-  if (e.target.checked) identifySong();
+  autoIdTimer = e.target.checked ? setInterval(() => identifySong(true), 5000) : null;
+  lyrStatus(e.target.checked ? '👂 Escuchando continuamente…' : '');
+});
+
+library.open().then(() => {
+  renderLibrary();
+  if (!library.persistent) lyrStatus('Aviso: este navegador no deja guardar el repertorio; se perderá al cerrar. Abre la app con iniciar.bat.', true);
 });
 
 // Búsqueda manual
@@ -677,6 +811,8 @@ async function searchLyrics() {
 function loadResult(i) {
   const t = lyrResults[i];
   if (!t) return;
+  currentSongId = null;
+  pending = null;
   lyrics.load(t);
   showSong();
   if (lyrics.fromFile) lyrStatus('✓ Letra cargada y sincronizada con la canción de prueba');

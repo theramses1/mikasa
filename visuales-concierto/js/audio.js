@@ -31,8 +31,24 @@ class AudioEngine {
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0.55;
       this.data = new Uint8Array(this.analyser.frequencyBinCount);
-      // Salida silenciosa de la que se graban muestras para identificar la canción.
-      this.recDest = this.ctx.createMediaStreamDestination();
+      // Memoria circular con los últimos 12 s de audio, para reconocer la canción al instante.
+      this.ringSec = 12;
+      this.ring = new Float32Array(Math.ceil(this.ctx.sampleRate * this.ringSec));
+      this.ringPos = 0;
+      this.ringFilled = 0;
+      this.ringTime = 0;
+      this.tap = this.ctx.createScriptProcessor(4096, 1, 1);
+      this.tap.onaudioprocess = (e) => {
+        const x = e.inputBuffer.getChannelData(0);
+        const r = this.ring;
+        for (let i = 0; i < x.length; i++) { r[this.ringPos] = x[i]; this.ringPos = (this.ringPos + 1) % r.length; }
+        this.ringFilled = Math.min(r.length, this.ringFilled + x.length);
+        this.ringTime = performance.now();
+      };
+      const mute = this.ctx.createGain();
+      mute.gain.value = 0;
+      this.tap.connect(mute);
+      mute.connect(this.ctx.destination);   // necesario para que el procesador funcione
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
@@ -59,7 +75,8 @@ class AudioEngine {
     });
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.source.connect(this.analyser);
-    this.source.connect(this.recDest);
+    this.source.connect(this.tap);
+    this.ringFilled = 0;
     this.label = this.stream.getAudioTracks()[0]?.label || 'entrada de audio';
   }
 
@@ -71,14 +88,24 @@ class AudioEngine {
     this.mediaEl.loop = true;
     this.source = this.ctx.createMediaElementSource(this.mediaEl);
     this.source.connect(this.analyser);
-    this.source.connect(this.recDest);
+    this.source.connect(this.tap);
+    this.ringFilled = 0;
     this.source.connect(this.ctx.destination);
     this.mediaEl.play();
     this.label = file.name;
   }
 
-  // Stream del audio actual (micrófono o canción) para grabar una muestra.
-  recordStream() { return this.source && this.recDest ? this.recDest.stream : null; }
+  // Últimos `sec` segundos de audio. Devuelve { samples, sampleRate, endTime } o null si no hay bastante.
+  recent(sec) {
+    if (!this.source || !this.ring) return null;
+    const n = Math.min(this.ringFilled, Math.floor(sec * this.ctx.sampleRate));
+    if (n < this.ctx.sampleRate * 3) return null;
+    const out = new Float32Array(n);
+    const r = this.ring;
+    let start = (this.ringPos - n + r.length) % r.length;
+    for (let i = 0; i < n; i++) out[i] = r[(start + i) % r.length];
+    return { samples: out, sampleRate: this.ctx.sampleRate, endTime: this.ringTime };
+  }
 
   get hasFile() { return !!this.mediaEl; }
   get paused() { return !this.mediaEl || this.mediaEl.paused; }

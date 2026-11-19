@@ -1,6 +1,6 @@
 // Letras en la proyección:
-//  - identifica la canción que suena (AudD) a partir de 10 s de audio,
-//  - busca la letra (LRCLIB; sincronizada si existe),
+//  - la canción que suena se reconoce con el repertorio local (ver library.js / fingerprint.js),
+//  - las letras se buscan gratis en LRCLIB (sincronizadas si existen) o se pegan a mano,
 //  - la mantiene sincronizada y la dibuja en una capa transparente con 5 formas de display.
 // Los 5 efectos de texto se aplican después en la GPU (ver COPY_FRAG en shaders.js).
 
@@ -8,7 +8,6 @@ const LYRIC_DISPLAYS = ['Karaoke', 'Gran centro', 'Desplazamiento', 'Palabra a p
 const LYRIC_EFFECTS = ['Neón', 'Cromático', 'Ola', 'Glitch', 'Video en el texto'];
 
 const LRCLIB = 'https://lrclib.net/api';
-const AUDD = 'https://api.audd.io/';
 const LYRIC_FONT = "'Arial Black', 'Segoe UI Black', 'Segoe UI', system-ui, sans-serif";
 
 // "[01:23.45] texto" -> [{ t: 83.45, text }]. Admite varias marcas por línea; ignora [ar:...] etc.
@@ -64,63 +63,27 @@ class LyricsEngine {
     this.canvas.height = Math.round(h);
   }
 
-  // ---------- Identificación ----------
-  _pickMime() {
-    const opts = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-    return opts.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
-  }
-
-  async _record(ms) {
-    const stream = this.audio.recordStream();
-    if (!stream) throw new Error('Primero elige un micrófono o carga una canción de prueba.');
-    if (!window.MediaRecorder) throw new Error('Este navegador no puede grabar audio. Usa Chrome o Edge.');
-    const mimeType = this._pickMime();
-    const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    const chunks = [];
-    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    const done = new Promise((res) => { rec.onstop = res; });
-    const t0 = performance.now();
-    rec.start();
-    await new Promise((r) => setTimeout(r, ms));
-    rec.stop();
-    await done;
-    return { blob: new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), t0 };
-  }
-
-  // Graba una muestra, la identifica con AudD y carga la letra. onStep(texto) informa del progreso.
-  async identify(token, onStep = () => {}) {
-    if (this.busy) return null;
-    this.busy = true;
-    try {
-      onStep('🎤 Escuchando 10 s…');
-      const { blob, t0 } = await this._record(10000);
-      onStep('🔎 Identificando…');
-      const fd = new FormData();
-      fd.append('file', blob, blob.type.includes('mp4') ? 'muestra.m4a' : 'muestra.webm');
-      if (token) fd.append('api_token', token);
-      let j;
-      try {
-        const r = await fetch(AUDD, { method: 'POST', body: fd });
-        j = await r.json();
-      } catch (e) {
-        throw new Error('No se pudo conectar con el servicio de identificación (AudD). ¿Hay internet?');
-      }
-      if (j.status === 'error') {
-        const msg = (j.error && (j.error.error_message || j.error.message)) || 'error desconocido';
-        throw new Error(`AudD: ${msg}`);
-      }
-      if (!j.result) return { found: false };
-      const res = j.result;
-      onStep(`📝 Buscando letra de ${res.artist} – ${res.title}…`);
-      const track = await this.findLyrics(res.artist, res.title, res.album);
-      // AudD indica en qué segundo de la canción empezaba la muestra.
-      this.load(track, { artist: res.artist, title: res.title });
+  // ---------- Reconocimiento ----------
+  // Carga la letra de una canción reconocida. posAtEnd = segundo de la canción en el que
+  // terminaba la muestra; endTime = instante (performance.now) en que terminó.
+  applyMatch(track, posAtEnd, endTime) {
+    this.load(track);
+    const posNow = posAtEnd + (performance.now() - endTime) / 1000;
+    if (this.audio.hasFile) {
+      // Con la canción de prueba: se sigue el reloj del archivo (respeta la pausa).
+      this.fromFile = true;
+      this.offset = posNow - this.audio.mediaEl.currentTime;
+    } else {
+      this.fromFile = false;
       this.offset = 0;
-      if (!this.fromFile) this.songStart = t0 - parseTimecode(res.timecode) * 1000;
-      return { found: true, artist: res.artist, title: res.title, hasLyrics: !!track, synced: this.synced };
-    } finally {
-      this.busy = false;
+      this.songStart = performance.now() - posNow * 1000;
     }
+  }
+
+  // Corrige solo el desfase (misma canción, nueva medición).
+  resync(posAtEnd, endTime) {
+    const posNow = posAtEnd + (performance.now() - endTime) / 1000;
+    this.offset += posNow - this.position(performance.now());
   }
 
   // ---------- Letras (LRCLIB) ----------
