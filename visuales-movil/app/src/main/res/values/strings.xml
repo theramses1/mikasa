@@ -30,9 +30,9 @@
     <string name="mode_live">🎸 Banda en vivo</string>
     <string name="mode_rec">💿 Música grabada</string>
     <string name="mode_live_help">Pasas la letra línea a línea siguiendo al cantante: con ◀ ▶, con los botones de volumen o con un clicker de presentaciones.</string>
-    <string name="mode_rec_help">La app reconoce la canción que suena (de tu setlist, añadida desde audio) y sincroniza la letra sola.</string>
+    <string name="mode_rec_help">La app escucha con el micrófono en tiempo real, reconoce la canción que suena (de tu setlist, añadida desde audio) y sincroniza la letra sola. Cambia de letra en cuanto cambia la canción.</string>
     <string name="identify">🎤 Identificar</string>
-    <string name="auto_identify">Continuo</string>
+    <string name="auto_identify">En tiempo real</string>
     <string name="sync">Sincronizar</string>
     <string name="start_now">⏱ Empieza ya</string>
     <string name="nudge_minus">−0,25 s</string>

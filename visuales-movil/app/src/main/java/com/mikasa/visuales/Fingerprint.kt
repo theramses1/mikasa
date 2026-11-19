@@ -254,6 +254,11 @@ class Resampler(private val srcRate: Int) {
 
     fun result(): FloatArray = out.copyOf(outLen)
 
+    // Uso en tiempo real: leer las muestras ya convertidas y vaciar el búfer.
+    fun pendingCount() = outLen
+    fun pendingAt(i: Int) = out[i]
+    fun clearPending() { outLen = 0 }
+
     companion object {
         fun convert(x: FloatArray, srcRate: Int): FloatArray {
             val r = Resampler(srcRate)

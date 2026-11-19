@@ -144,20 +144,29 @@ class SongLibrary(context: Context) {
      * Mismos umbrales que la versión web.
      */
     fun identify(mono: FloatArray): IdResult? {
+        val r = rank(mono) ?: return null
+        if (r.score < 6 || r.score < 1.5 * maxOf(1, r.second)) return null
+        return IdResult(r.song, r.pos, r.score, sure = r.score >= 10 && r.score >= 2 * maxOf(1, r.second))
+    }
+
+    /** Mejor candidato sin umbrales (lo usa el reconocimiento en tiempo real). */
+    class Ranked(val song: Song, val pos: Double, val score: Int, val second: Int)
+
+    fun rank(mono: FloatArray): Ranked? {
         val withAudio = synchronized(this) { songs.filter { it.hasAudio }.map { it.id to it.index!! } }
         if (withAudio.isEmpty()) return null
         val r = Fingerprint.match(Fingerprint.fingerprint(mono), withAudio)
         val best = r.firstOrNull() ?: return null
-        val second = r.getOrNull(1)?.score ?: 0
-        if (best.score < 6 || best.score < 1.5 * maxOf(1, second)) return null
         val song = synchronized(this) { songs.firstOrNull { it.id == best.id } } ?: return null
-        return IdResult(
+        return Ranked(
             song,
             pos = best.offset * Fingerprint.FRAME_SEC + mono.size.toDouble() / Fingerprint.SR,
             score = best.score,
-            sure = best.score >= 10 && best.score >= 2 * maxOf(1, second),
+            second = r.getOrNull(1)?.score ?: 0,
         )
     }
+
+    fun hasAudioSongs() = synchronized(this) { songs.any { it.hasAudio } }
 
     // ---------------- Archivos ----------------
 

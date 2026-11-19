@@ -54,7 +54,8 @@ El operador pasa la letra **línea a línea** siguiendo al cantante, en la barra
 - **Clicker de presentaciones** o teclado Bluetooth: `AvPág`/`→`/`Espacio` siguiente, `RePág`/`←` anterior, `Shift`+`AvPág`/`RePág` o `]` `[` cambian de canción.
 
 ### 💿 Música grabada
-- **🎤 Identificar** reconoce lo que suena (de las canciones añadidas **desde audio**) y carga la letra en el segundo exacto. **Continuo** escucha cada 5 s y cambia de letra sola.
+- **Reconocimiento en tiempo real** (activado por defecto): la app escucha **continuamente con el micrófono del celular** y analiza el audio cada segundo. Reconoce la canción que suena (de las añadidas **desde audio**) en unos **4 s**, pone la letra en el segundo exacto, la mantiene sincronizada y **cambia de letra sola en 3-5 s** cuando cambia la canción. Arriba en la pantalla se ve qué canción reconoció y en qué minuto va.
+- **🎤 Identificar** fuerza un reconocimiento al momento.
 - Funciona sin internet y aguanta ruido y eco, pero reconoce **grabaciones** (DJ, pistas, música entre bandas): una banda tocando en vivo suena distinta a la grabación. Con banda en vivo usa el otro modo.
 - Para sincronizar a mano: **⏱ Empieza ya**, **▶ ◀** (esa línea empieza ahora) y **±0,25 s**.
 

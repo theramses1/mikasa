@@ -141,6 +141,7 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         b.tvBpm.post(bpmTicker)
         displayManager.registerDisplayListener(displayListener, null)
         updateExternalDisplay()
+        lyricsCtl.onResume()
     }
 
     override fun onPause() {
@@ -150,6 +151,7 @@ class MainActivity : AppCompatActivity(), VisualRenderer.Callbacks {
         audio.stop()
         b.tvBpm.removeCallbacks(bpmTicker)
         displayManager.unregisterDisplayListener(displayListener)
+        lyricsCtl.onPause()
         super.onPause()
     }
 

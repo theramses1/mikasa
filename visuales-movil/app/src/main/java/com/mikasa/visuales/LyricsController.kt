@@ -32,8 +32,22 @@ class LyricsController(
     private val worker = Executors.newSingleThreadExecutor()
     private val prefs = activity.getSharedPreferences("visuales", AppCompatActivity.MODE_PRIVATE)
     private var currentSongId: Long? = null
+        set(v) { field = v; recognizer.currentSongId = v }
     private var identifying = false
-    private var autoId = false
+    /** Reconocimiento en tiempo real activado por el usuario (solo actúa en modo música grabada). */
+    private var liveId = true
+    private var liveMessage = ""
+    private val recognizer = LiveRecognizer(audio, library, object : LiveRecognizer.Listener {
+        override fun onMatch(song: Song, pos: Double, endMs: Double, score: Int) = onLiveMatch(song, pos, endMs)
+        override fun onListening(message: String, secondsWithoutMatch: Int) {
+            liveMessage = if (secondsWithoutMatch >= 15 && currentSongId != null) "🎤 Sin coincidencia hace ${secondsWithoutMatch} s" else message
+            updateLiveChip()
+        }
+    })
+
+    /** Indicador en la pantalla principal; MainActivity decide si se ve (controles visibles). */
+    var liveChipAllowed = true
+        set(v) { field = v; updateLiveChip() }
 
     /** true mientras hay letra cargada (el teleprompter y las teclas de volumen la controlan). */
     val active get() = lyrics.lines.isNotEmpty() || lyrics.title.isNotEmpty()
@@ -48,15 +62,8 @@ class LyricsController(
     private val promptTicker = object : Runnable {
         override fun run() {
             updatePrompt()
+            updateLiveChip()
             b.teleprompter.postDelayed(this, 250)
-        }
-    }
-
-    private val autoIdTicker = object : Runnable {
-        override fun run() {
-            if (!autoId) return
-            identify(silent = true)
-            b.btnIdentify.postDelayed(this, 5000)
         }
     }
 
@@ -75,10 +82,12 @@ class LyricsController(
         b.btnAddSong.setOnClickListener { editSong(null) }
         b.btnAddAudio.setOnClickListener { pickAudio.launch(arrayOf("audio/*")) }
         b.btnIdentify.setOnClickListener { identify(silent = false) }
+        liveId = prefs.getBoolean("live_id", true)
+        b.switchAutoId.isChecked = liveId
         b.switchAutoId.setOnCheckedChangeListener { _, on ->
-            autoId = on
-            b.btnIdentify.removeCallbacks(autoIdTicker)
-            if (on) b.btnIdentify.post(autoIdTicker)
+            liveId = on
+            prefs.edit().putBoolean("live_id", on).apply()
+            updateRecognizer()
         }
         b.btnStartNow.setOnClickListener { lyrics.startNow(); status("⏱ Letra sincronizada desde el inicio") }
         b.btnNudgeMinus.setOnClickListener { lyrics.nudge(-0.25) }
@@ -119,7 +128,53 @@ class LyricsController(
         if (b.groupLyrMode.checkedButtonId != target) b.groupLyrMode.check(target)
         b.recBox.visibility = if (live) View.GONE else View.VISIBLE
         b.tvModeHelp.setText(if (live) R.string.mode_live_help else R.string.mode_rec_help)
-        if (live && autoId) b.switchAutoId.isChecked = false
+        updateRecognizer()
+    }
+
+    // ---------------- Tiempo real ----------------
+
+    private var resumed = false
+
+    fun onResume() { resumed = true; updateRecognizer() }
+    fun onPause() { resumed = false; updateRecognizer() }
+
+    /** Escucha continuamente mientras la app está abierta, en modo música grabada y con el interruptor activado. */
+    private fun updateRecognizer() {
+        val want = resumed && liveId && !lyrics.manual
+        if (want && !recognizer.running) { liveMessage = "🎤 Escuchando…"; recognizer.start() }
+        if (!want && recognizer.running) recognizer.stop()
+        updateLiveChip()
+    }
+
+    private fun updateLiveChip() {
+        val show = liveChipAllowed && recognizer.running
+        b.tvLive.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) return
+        val songOk = currentSongId != null && lyrics.title.isNotEmpty() && !liveMessage.startsWith("🎤 Sin")
+        b.tvLive.text = if (songOk && !liveMessage.startsWith("🎤 Parece")) {
+            val pos = lyrics.position(LyricsEngine.nowMs()).coerceAtLeast(0.0)
+            "🎵 ${lyrics.title.take(28)}  %d:%02d".format((pos / 60).toInt(), (pos % 60).toInt())
+        } else liveMessage
+    }
+
+    /** Coincidencia confirmada por el reconocimiento en tiempo real. */
+    private fun onLiveMatch(song: Song, pos: Double, endMs: Double) {
+        liveMessage = ""
+        if (lyrics.manual) return
+        if (song.id == currentSongId && lyrics.title.isNotEmpty()) {
+            // Misma canción: corrige si se ha desviado medio segundo o más (deja los ajustes finos de ±0,25 s).
+            val now = LyricsEngine.nowMs()
+            val drift = pos + (now - endMs) / 1000 - lyrics.position(now)
+            if (abs(drift) >= 0.5) lyrics.resync(pos, endMs)
+        } else {
+            currentSongId = song.id
+            lyrics.applyMatch(song.trackForLyrics(), pos, endMs)
+            renderSetlist()
+            status("✓ ${song.label} — reconocida en %d:%02d".format((pos / 60).toInt(), (pos % 60).toInt()) +
+                if (lyrics.lines.isEmpty()) " (sin letra)" else "")
+        }
+        updatePrompt()
+        updateLiveChip()
     }
 
     private fun status(msg: String, error: Boolean = false) {
@@ -419,7 +474,7 @@ class LyricsController(
             if (!silent) status("Para reconocer canciones, añádelas con 🎵 Desde audio.", true)
             return
         }
-        val rec = audio.recent(8.0)
+        val rec = audio.recentForId(8.0)
         if (rec == null) {
             if (!silent) status("Escuchando… vuelve a intentarlo en unos segundos.", true)
             return
@@ -428,7 +483,7 @@ class LyricsController(
         if (!silent) status("🎤 Reconociendo…")
         val (samples, endNs) = rec
         worker.execute {
-            val m = runCatching { library.identify(Resampler.convert(samples, AudioEngine.SAMPLE_RATE)) }.getOrNull()
+            val m = runCatching { library.identify(samples) }.getOrNull()
             activity.runOnUiThread {
                 identifying = false
                 applyMatch(m, endNs / 1e6, silent)
@@ -460,7 +515,7 @@ class LyricsController(
     }
 
     fun release() {
-        autoId = false
+        recognizer.release()
         worker.shutdown()
     }
 }
