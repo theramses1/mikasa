@@ -339,6 +339,15 @@
                         android:textColor="@color/white" />
                 </LinearLayout>
 
+                <!-- Resultado del reconocimiento, justo debajo del botón -->
+                <TextView
+                    android:id="@+id/tvIdStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="#DDFFFFFF"
+                    android:textSize="13sp" />
+
                 <TextView style="@style/PanelLabel" android:text="@string/sync" />
                 <LinearLayout style="@style/PanelRow">
                     <com.google.android.material.button.MaterialButton

@@ -43,6 +43,8 @@ class AudioEngine(private val context: Context) {
     @Volatile var high = 0f; private set
     @Volatile var level = 0f; private set
     @Volatile var bpm = 0; private set
+    /** Volumen real del micrófono (RMS 0..1, sin auto-ganancia). */
+    @Volatile var rms = 0f; private set
     @Volatile var sensitivity = 1f
 
     /** Momento del último golpe (System.nanoTime) o 0. */
@@ -166,7 +168,13 @@ class AudioEngine(private val context: Context) {
             val endNs = System.nanoTime()
             val startNs = endNs - n * 1_000_000_000L / SAMPLE_RATE
             pcmListener?.invoke(buf, n, startNs)
-            for (i in 0 until n) fpResampler.push(buf[i] / 32768f)
+            var sq = 0.0
+            for (i in 0 until n) {
+                val v = buf[i] / 32768f
+                sq += v * v
+                fpResampler.push(v)
+            }
+            rms = kotlin.math.sqrt(sq / n).toFloat()
             synchronized(history) {
                 val m = fpResampler.pendingCount()
                 for (i in 0 until m) {

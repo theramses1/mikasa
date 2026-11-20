@@ -8,6 +8,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -41,6 +42,7 @@ class LyricsController(
         override fun onMatch(song: Song, pos: Double, endMs: Double, score: Int) = onLiveMatch(song, pos, endMs)
         override fun onListening(message: String, secondsWithoutMatch: Int) {
             liveMessage = if (secondsWithoutMatch >= 15 && currentSongId != null) "🎤 Sin coincidencia hace ${secondsWithoutMatch} s" else message
+            if (!identifying) b.tvIdStatus.text = "Tiempo real: $liveMessage"
             updateLiveChip()
         }
     })
@@ -170,6 +172,7 @@ class LyricsController(
             currentSongId = song.id
             lyrics.applyMatch(song.trackForLyrics(), pos, endMs)
             renderSetlist()
+            if (!identifying) b.tvIdStatus.text = "Tiempo real: ✓ ${song.label}"
             status("✓ ${song.label} — reconocida en %d:%02d".format((pos / 60).toInt(), (pos % 60).toInt()) +
                 if (lyrics.lines.isEmpty()) " (sin letra)" else "")
         }
@@ -468,27 +471,99 @@ class LyricsController(
 
     // ---------------- Reconocimiento ----------------
 
+    // ---------------- Identificar (botón 🎤) ----------------
+
+    private val idExec = Executors.newSingleThreadExecutor()
+    private var idStartMs = 0.0
+    private var idAttempt = 0
+    private var idLevelSum = 0f
+    private var idLevelN = 0
+
+    /** Mensaje junto al botón Identificar (y en el estado general del panel). */
+    private fun idStatus(msg: String, error: Boolean = false) {
+        b.tvIdStatus.text = msg
+        b.tvIdStatus.setTextColor(if (error) 0xFFFF8A8A.toInt() else 0xDDFFFFFF.toInt())
+        status(msg, error)
+    }
+
+    private fun toastLong(msg: String) = Toast.makeText(activity, msg, Toast.LENGTH_LONG).show()
+
+    /**
+     * Botón 🎤 Identificar: escucha con el micrófono como Shazam. Va reintentando a medida que entra
+     * audio, hasta 12 s, y muestra en el propio botón que está escuchando.
+     */
     private fun identify(silent: Boolean) {
         if (identifying) return
-        if (library.snapshot().none { it.hasAudio }) {
-            if (!silent) status("Para reconocer canciones, añádelas con 🎵 Desde audio.", true)
+        if (!library.hasAudioSongs()) {
+            if (!silent) {
+                AlertDialog.Builder(activity)
+                    .setTitle("Primero añade canciones desde audio")
+                    .setMessage("La app reconoce las canciones de tu setlist comparándolas con sus audios. " +
+                        "Pulsa \"Añadir audios\" y elige los mp3/m4a de las canciones del show.")
+                    .setPositiveButton("Añadir audios") { _, _ -> pickAudio.launch(arrayOf("audio/*")) }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+                idStatus("No hay canciones con audio en el setlist.", true)
+            }
             return
         }
-        val rec = audio.recentForId(8.0)
-        if (rec == null) {
-            if (!silent) status("Escuchando… vuelve a intentarlo en unos segundos.", true)
-            return
-        }
-        identifying = true
-        if (!silent) status("🎤 Reconociendo…")
-        val (samples, endNs) = rec
-        worker.execute {
-            val m = runCatching { library.identify(samples) }.getOrNull()
-            activity.runOnUiThread {
-                identifying = false
-                applyMatch(m, endNs / 1e6, silent)
+        if (!audio.running) {
+            val granted = ContextCompat.checkSelfPermission(activity, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted || !audio.start()) {
+                val msg = if (!granted) "Falta el permiso de micrófono: actívalo en Ajustes del sistema > Apps > Visuales."
+                else "No se pudo abrir el micrófono (¿lo está usando otra app?)."
+                idStatus(msg, true)
+                if (!silent) toastLong(msg)
+                return
             }
         }
+        identifying = true
+        idStartMs = LyricsEngine.nowMs()
+        idAttempt = 0
+        idLevelSum = 0f; idLevelN = 0
+        b.btnIdentify.isEnabled = false
+        idStatus("🎤 Escuchando…")
+        idTick(silent)
+    }
+
+    private fun idTick(silent: Boolean) {
+        val elapsed = (LyricsEngine.nowMs() - idStartMs) / 1000
+        idLevelSum += audio.rms; idLevelN++
+        b.btnIdentify.text = "🎤 Escuchando… %d s".format(elapsed.toInt())
+        val rec = audio.recentForId(8.0, minSec = 3.0)
+        if (rec == null) {
+            // Aún no hay 3 s de audio: esperar un poco más.
+            if (elapsed > 12) finishIdentify(null, 0.0, silent) else b.btnIdentify.postDelayed({ idTick(silent) }, 500)
+            return
+        }
+        val (samples, endNs) = rec
+        idAttempt++
+        idExec.execute {
+            val m = runCatching { library.identify(samples) }.getOrNull()
+            activity.runOnUiThread {
+                if (!identifying) return@runOnUiThread
+                val t = (LyricsEngine.nowMs() - idStartMs) / 1000
+                if (m != null || t > 12) finishIdentify(m, endNs / 1e6, silent)
+                else b.btnIdentify.postDelayed({ idTick(silent) }, 700)
+            }
+        }
+    }
+
+    private fun finishIdentify(m: SongLibrary.IdResult?, endMs: Double, silent: Boolean) {
+        identifying = false
+        b.btnIdentify.isEnabled = true
+        b.btnIdentify.setText(R.string.identify)
+        if (m == null) {
+            val avgLevel = if (idLevelN > 0) idLevelSum / idLevelN else 0f
+            val msg = if (avgLevel < 0.003f) "No se oye nada: acerca el celular al altavoz o sube el volumen."
+            else "No se reconoció. Comprueba que la canción está en el setlist añadida con 🎵 Desde audio."
+            idStatus(msg, true)
+            if (!silent) toastLong(msg)
+            return
+        }
+        applyMatch(m, endMs, silent)
+        if (!silent) toastLong("✓ ${m.song.label}")
     }
 
     private fun applyMatch(m: SongLibrary.IdResult?, endMs: Double, silent: Boolean) {
@@ -501,7 +576,7 @@ class LyricsController(
             val posNow = m.pos + (LyricsEngine.nowMs() - endMs) / 1000
             val drift = posNow - lyrics.position(LyricsEngine.nowMs())
             if (abs(drift) > 1.5 || !silent) lyrics.resync(m.pos, endMs)
-            if (!silent) status("✓ ${m.song.label} (sincronizada)")
+            if (!silent) idStatus("✓ ${m.song.label} (sincronizada)")
             return
         }
         if (silent && !m.sure) return
@@ -511,11 +586,12 @@ class LyricsController(
         updatePrompt()
         val min = (m.pos / 60).toInt()
         val sec = (m.pos % 60).toInt()
-        status("✓ ${m.song.label} — en %d:%02d".format(min, sec) + if (lyrics.lines.isEmpty()) " (sin letra)" else "")
+        idStatus("✓ ${m.song.label} — en %d:%02d".format(min, sec) + if (lyrics.lines.isEmpty()) " (sin letra)" else "")
     }
 
     fun release() {
         recognizer.release()
+        idExec.shutdown()
         worker.shutdown()
     }
 }
