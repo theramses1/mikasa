@@ -300,6 +300,68 @@
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
+            <!-- Reconocer la canción que suena (siempre visible) -->
+            <TextView style="@style/PanelLabel" android:text="@string/recognize_title" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/groupIdSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                app:checkedButton="@id/sourceInternet"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sourceInternet" style="@style/AutoButton" android:text="@string/source_internet" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sourceLocal" style="@style/AutoButton" android:text="@string/source_local" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <LinearLayout style="@style/PanelRow">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnIdentify" style="@style/RowButton" android:text="@string/identify" />
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchAutoId"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/auto_identify"
+                    android:textColor="@color/white" />
+            </LinearLayout>
+
+            <!-- Resultado del reconocimiento, justo debajo del botón -->
+            <TextView
+                android:id="@+id/tvIdStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#DDFFFFFF"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:id="@+id/tokenBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <EditText
+                    android:id="@+id/etAuddToken"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/audd_token_hint"
+                    android:importantForAutofill="no"
+                    android:inputType="textVisiblePassword"
+                    android:maxLines="1"
+                    android:textColor="@color/white"
+                    android:textColorHint="#88FFFFFF"
+                    android:textSize="13sp" />
+
+                <TextView
+                    style="@style/PanelHelp"
+                    android:text="@string/audd_help" />
+            </LinearLayout>
+
+            <TextView style="@style/PanelLabel" android:text="@string/lyrics_mode" />
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/groupLyrMode"
                 android:layout_width="match_parent"
@@ -326,27 +388,6 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
-
-                <LinearLayout style="@style/PanelRow">
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnIdentify" style="@style/RowButton" android:text="@string/identify" />
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switchAutoId"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/auto_identify"
-                        android:textColor="@color/white" />
-                </LinearLayout>
-
-                <!-- Resultado del reconocimiento, justo debajo del botón -->
-                <TextView
-                    android:id="@+id/tvIdStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:textColor="#DDFFFFFF"
-                    android:textSize="13sp" />
 
                 <TextView style="@style/PanelLabel" android:text="@string/sync" />
                 <LinearLayout style="@style/PanelRow">

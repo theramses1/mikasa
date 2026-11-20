@@ -70,6 +70,29 @@ class AudioEngine(private val context: Context) {
     private var historyFilled = 0
     private var historyEndNs = 0L
 
+    // Últimos 12 s a calidad completa (para el reconocimiento por internet).
+    private val raw = ShortArray(SAMPLE_RATE * 12)
+    private var rawPos = 0
+    private var rawFilled = 0
+    private var rawEndNs = 0L
+
+    /**
+     * Últimos `sec` segundos del micrófono a 22 050 Hz (para enviar a internet) y el instante en
+     * que terminan. null si aún no hay `minSec` segundos.
+     */
+    fun recentHq(sec: Double, minSec: Double): Pair<FloatArray, Long>? = synchronized(raw) {
+        val n = minOf(rawFilled, (sec * SAMPLE_RATE).toInt()) / 2 * 2
+        if (n < SAMPLE_RATE * minSec) return null
+        val out = FloatArray(n / 2)
+        val start = (rawPos - n + raw.size) % raw.size
+        for (i in out.indices) {
+            val a = raw[(start + 2 * i) % raw.size]
+            val b = raw[(start + 2 * i + 1) % raw.size]
+            out[i] = (a + b) / 65536f
+        }
+        out to rawEndNs
+    }
+
     // FFT
     private val ring = FloatArray(FFT_SIZE)
     private var ringPos = 0
@@ -157,6 +180,7 @@ class AudioEngine(private val context: Context) {
         record?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
         record = null
         synchronized(history) { historyFilled = 0; fpResampler = Resampler(SAMPLE_RATE) }
+        synchronized(raw) { rawFilled = 0 }
         bass = 0f; mid = 0f; high = 0f; level = 0f
     }
 
@@ -168,6 +192,11 @@ class AudioEngine(private val context: Context) {
             val endNs = System.nanoTime()
             val startNs = endNs - n * 1_000_000_000L / SAMPLE_RATE
             pcmListener?.invoke(buf, n, startNs)
+            synchronized(raw) {
+                for (i in 0 until n) { raw[rawPos] = buf[i]; rawPos = (rawPos + 1) % raw.size }
+                rawFilled = minOf(raw.size, rawFilled + n)
+                rawEndNs = endNs
+            }
             var sq = 0.0
             for (i in 0 until n) {
                 val v = buf[i] / 32768f

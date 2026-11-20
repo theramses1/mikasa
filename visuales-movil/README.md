@@ -53,6 +53,16 @@ El operador pasa la letra **línea a línea** siguiendo al cantante, en la barra
 - **Botones de volumen** del celular: subir = siguiente línea, bajar = anterior.
 - **Clicker de presentaciones** o teclado Bluetooth: `AvPág`/`→`/`Espacio` siguiente, `RePág`/`←` anterior, `Shift`+`AvPág`/`RePág` o `]` `[` cambian de canción.
 
+### 🌐 Reconocer cualquier canción por internet (predeterminado)
+Arriba en el panel de letras, en **Reconocer la canción que suena**, con **🌐 Internet** elegido:
+1. Pulsa **🎤 Identificar**. La app manda los últimos 10 s del micrófono al servicio **AudD** (como Shazam), que responde artista, título y en qué segundo va la canción.
+2. Busca la letra en **LRCLIB** y la proyecta **sincronizada** desde ese punto (si tiene tiempos). No hace falta tener la canción guardada.
+3. Con **Automático** activado (modo música grabada), vuelve a identificar cuando la canción debería terminar y cada 60 s, así la letra cambia sola. Si no se oye nada no consulta.
+
+Sin clave hay unas pocas consultas gratis al día. Para más, crea una cuenta en [audd.io](https://audd.io) y pega tu **api_token** en "Clave de AudD". Cada identificación gasta una consulta. Necesita internet, y el audio de la muestra se envía a AudD.
+
+**📁 Mi setlist** usa en cambio el reconocedor propio, sin internet, solo con las canciones añadidas desde audio (ver abajo).
+
 ### 💿 Música grabada
 - **Reconocimiento en tiempo real** (activado por defecto): la app escucha **continuamente con el micrófono del celular** y analiza el audio cada segundo. Reconoce la canción que suena (de las añadidas **desde audio**) en unos **4 s**, pone la letra en el segundo exacto, la mantiene sincronizada y **cambia de letra sola en 3-5 s** cuando cambia la canción. Arriba en la pantalla se ve qué canción reconoció y en qué minuto va.
 - **🎤 Identificar** fuerza un reconocimiento al momento.

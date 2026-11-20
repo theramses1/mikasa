@@ -32,7 +32,7 @@
     <string name="mode_live_help">Pasas la letra línea a línea siguiendo al cantante: con ◀ ▶, con los botones de volumen o con un clicker de presentaciones.</string>
     <string name="mode_rec_help">La app escucha con el micrófono en tiempo real, reconoce la canción que suena (de tu setlist, añadida desde audio) y sincroniza la letra sola. Cambia de letra en cuanto cambia la canción.</string>
     <string name="identify">🎤 Identificar</string>
-    <string name="auto_identify">En tiempo real</string>
+    <string name="auto_identify">Automático</string>
     <string name="sync">Sincronizar</string>
     <string name="start_now">⏱ Empieza ya</string>
     <string name="nudge_minus">−0,25 s</string>
@@ -61,4 +61,10 @@
     <string name="clean_mode_hint">Modo proyección: solo se ve el video. Mantén pulsado o pulsa Atrás para salir.</string>
     <string name="projecting_on">Proyectando en %1$s</string>
     <string name="projection_stopped">Proyección externa detenida</string>
+    <string name="recognize_title">Reconocer la canción que suena</string>
+    <string name="source_internet">🌐 Internet</string>
+    <string name="source_local">📁 Mi setlist</string>
+    <string name="lyrics_mode">Cómo avanza la letra</string>
+    <string name="audd_token_hint">Clave de AudD (opcional)</string>
+    <string name="audd_help">🌐 Reconoce cualquier canción con el servicio AudD y trae su letra de LRCLIB. Sin clave hay unas pocas consultas gratis al día; para más, crea una cuenta en audd.io y pega aquí tu api_token. Cada identificación gasta una consulta.</string>
 </resources>

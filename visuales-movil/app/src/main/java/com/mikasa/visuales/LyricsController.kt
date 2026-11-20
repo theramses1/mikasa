@@ -35,8 +35,10 @@ class LyricsController(
     private var currentSongId: Long? = null
         set(v) { field = v; recognizer.currentSongId = v }
     private var identifying = false
-    /** Reconocimiento en tiempo real activado por el usuario (solo actúa en modo música grabada). */
+    /** Reconocimiento automático activado por el usuario (solo actúa en modo música grabada). */
     private var liveId = true
+    /** true = reconocer cualquier canción por internet (AudD); false = solo las del setlist, sin internet. */
+    private var internet = true
     private var liveMessage = ""
     private val recognizer = LiveRecognizer(audio, library, object : LiveRecognizer.Listener {
         override fun onMatch(song: Song, pos: Double, endMs: Double, score: Int) = onLiveMatch(song, pos, endMs)
@@ -84,6 +86,23 @@ class LyricsController(
         b.btnAddSong.setOnClickListener { editSong(null) }
         b.btnAddAudio.setOnClickListener { pickAudio.launch(arrayOf("audio/*")) }
         b.btnIdentify.setOnClickListener { identify(silent = false) }
+        internet = prefs.getBoolean("id_internet", true)
+        b.groupIdSource.check(if (internet) R.id.sourceInternet else R.id.sourceLocal)
+        b.groupIdSource.addOnButtonCheckedListener { _, id, checked ->
+            if (!checked) return@addOnButtonCheckedListener
+            internet = id == R.id.sourceInternet
+            prefs.edit().putBoolean("id_internet", internet).apply()
+            b.tvIdStatus.text = ""
+            updateRecognizer()
+        }
+        b.etAuddToken.setText(prefs.getString("audd_token", ""))
+        b.etAuddToken.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, c: Int, d: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, c: Int, d: Int) {}
+            override fun afterTextChanged(e: android.text.Editable?) {
+                prefs.edit().putString("audd_token", e?.toString()?.trim() ?: "").apply()
+            }
+        })
         liveId = prefs.getBoolean("live_id", true)
         b.switchAutoId.isChecked = liveId
         b.switchAutoId.setOnCheckedChangeListener { _, on ->
@@ -142,20 +161,60 @@ class LyricsController(
 
     /** Escucha continuamente mientras la app está abierta, en modo música grabada y con el interruptor activado. */
     private fun updateRecognizer() {
-        val want = resumed && liveId && !lyrics.manual
-        if (want && !recognizer.running) { liveMessage = "🎤 Escuchando…"; recognizer.start() }
-        if (!want && recognizer.running) recognizer.stop()
+        b.tokenBox.visibility = if (internet) View.VISIBLE else View.GONE
+        b.switchAutoId.visibility = if (lyrics.manual) View.GONE else View.VISIBLE
+        val auto = resumed && liveId && !lyrics.manual
+        val wantLocal = auto && !internet
+        if (wantLocal && !recognizer.running) { liveMessage = "🎤 Escuchando…"; recognizer.start() }
+        if (!wantLocal && recognizer.running) recognizer.stop()
+        val wantNet = auto && internet
+        if (wantNet && !netAuto) {
+            netAuto = true
+            nextNetMs = 0.0
+            liveMessage = "🌐 Escuchando…"
+            b.btnIdentify.removeCallbacks(netTicker)
+            b.btnIdentify.post(netTicker)
+        } else if (!wantNet && netAuto) {
+            netAuto = false
+            b.btnIdentify.removeCallbacks(netTicker)
+        }
         updateLiveChip()
     }
 
+    // Automático por internet: identifica al empezar, cuando la canción debería terminar y, por si
+    // la cambian antes, cada 60 s. Si no se oye nada no consulta (no gasta consultas).
+    private var netAuto = false
+    private var nextNetMs = 0.0
+    private val netTicker = object : Runnable {
+        override fun run() {
+            if (!netAuto) return
+            if (!identifying && LyricsEngine.nowMs() >= nextNetMs) identify(silent = true)
+            b.btnIdentify.postDelayed(this, 1000)
+        }
+    }
+
+    private fun scheduleNextNet(found: Boolean, silence: Boolean = false) {
+        val now = LyricsEngine.nowMs()
+        nextNetMs = when {
+            silence -> now + 10_000
+            !found -> now + 20_000
+            else -> {
+                val dur = netDuration
+                val toEnd = if (dur > 0) (dur - lyrics.position(now) + 3) * 1000 else Double.MAX_VALUE
+                now + minOf(60_000.0, maxOf(15_000.0, toEnd))
+            }
+        }
+    }
+
     private fun updateLiveChip() {
-        val show = liveChipAllowed && recognizer.running
+        val show = liveChipAllowed && (recognizer.running || netAuto)
         b.tvLive.visibility = if (show) View.VISIBLE else View.GONE
         if (!show) return
-        val songOk = currentSongId != null && lyrics.title.isNotEmpty() && !liveMessage.startsWith("🎤 Sin")
+        val songOk = (currentSongId != null || (netAuto && netKey != null)) && lyrics.title.isNotEmpty() &&
+            !liveMessage.startsWith("🎤 Sin")
         b.tvLive.text = if (songOk && !liveMessage.startsWith("🎤 Parece")) {
             val pos = lyrics.position(LyricsEngine.nowMs()).coerceAtLeast(0.0)
-            "🎵 ${lyrics.title.take(28)}  %d:%02d".format((pos / 60).toInt(), (pos % 60).toInt())
+            (if (netAuto) "🌐 " else "🎵 ") + "${lyrics.title.take(28)}  %d:%02d".format((pos / 60).toInt(), (pos % 60).toInt())
         } else liveMessage
     }
 
@@ -287,6 +346,7 @@ class LyricsController(
 
     private fun showSong(s: Song) {
         currentSongId = s.id
+        netKey = null
         lyrics.load(s.trackForLyrics(), s.label)
         renderSetlist()
         updatePrompt()
@@ -456,6 +516,7 @@ class LyricsController(
             .setItems(arrayOf("Mostrar ahora", "Añadir al setlist")) { _, which ->
                 if (which == 0) {
                     currentSongId = null
+                    netKey = null
                     lyrics.load(t)
                     renderSetlist()
                     status(if (lyrics.manual) "✓ Letra cargada. Pasa líneas con ◀ ▶." else "✓ Letra cargada. Pulsa ⏱ \"Empieza ya\" cuando arranque.")
@@ -494,6 +555,7 @@ class LyricsController(
      */
     private fun identify(silent: Boolean) {
         if (identifying) return
+        if (internet) { identifyInternet(silent); return }
         if (!library.hasAudioSongs()) {
             if (!silent) {
                 AlertDialog.Builder(activity)
@@ -507,17 +569,7 @@ class LyricsController(
             }
             return
         }
-        if (!audio.running) {
-            val granted = ContextCompat.checkSelfPermission(activity, android.Manifest.permission.RECORD_AUDIO) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!granted || !audio.start()) {
-                val msg = if (!granted) "Falta el permiso de micrófono: actívalo en Ajustes del sistema > Apps > Visuales."
-                else "No se pudo abrir el micrófono (¿lo está usando otra app?)."
-                idStatus(msg, true)
-                if (!silent) toastLong(msg)
-                return
-            }
-        }
+        if (!ensureMic(silent)) return
         identifying = true
         idStartMs = LyricsEngine.nowMs()
         idAttempt = 0
@@ -564,6 +616,127 @@ class LyricsController(
         }
         applyMatch(m, endMs, silent)
         if (!silent) toastLong("✓ ${m.song.label}")
+    }
+
+    /** Arranca el micrófono si hace falta. false (con aviso) si no se puede. */
+    private fun ensureMic(silent: Boolean): Boolean {
+        if (audio.running) return true
+        val granted = ContextCompat.checkSelfPermission(activity, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted && audio.start()) return true
+        val msg = if (!granted) "Falta el permiso de micrófono: actívalo en Ajustes del sistema > Apps > Visuales."
+        else "No se pudo abrir el micrófono (¿lo está usando otra app?)."
+        idStatus(msg, true)
+        if (!silent) toastLong(msg)
+        return false
+    }
+
+    // ---------------- Identificar por internet (AudD + LRCLIB) ----------------
+
+    /** "artista|título" de la última canción reconocida por internet. */
+    private var netKey: String? = null
+    private var netDuration = 0.0
+
+    private fun identifyInternet(silent: Boolean) {
+        if (!ensureMic(silent)) return
+        identifying = true
+        idStartMs = LyricsEngine.nowMs()
+        b.btnIdentify.isEnabled = false
+        if (!silent) idStatus("🎤 Escuchando…")
+        netTick(silent)
+    }
+
+    private fun netTick(silent: Boolean) {
+        val elapsed = (LyricsEngine.nowMs() - idStartMs) / 1000
+        b.btnIdentify.text = "🎤 Escuchando… %d s".format(elapsed.toInt())
+        // 10 s de audio (con 5 s basta si el micrófono acaba de arrancar).
+        val rec = audio.recentHq(10.0, minSec = if (elapsed > 6) 5.0 else 10.0)
+        if (rec == null) {
+            if (elapsed > 14) netFinish("No llega audio del micrófono.", error = true, silent = silent)
+            else b.btnIdentify.postDelayed({ netTick(silent) }, 500)
+            return
+        }
+        val (samples, endNs) = rec
+        var sq = 0.0
+        for (v in samples) sq += v * v
+        if (kotlin.math.sqrt(sq / samples.size) < 0.003) {
+            // Silencio: no se gasta una consulta.
+            scheduleNextNet(found = false, silence = true)
+            netFinish("No se oye nada: acerca el celular al altavoz o sube el volumen.", error = true, silent = silent)
+            return
+        }
+        b.btnIdentify.text = "🌐 Buscando…"
+        if (!silent) idStatus("🌐 Buscando la canción en internet…")
+        val token = prefs.getString("audd_token", "")
+        idExec.execute {
+            val result = runCatching {
+                val r = Audd.recognize(samples, AudioEngine.SAMPLE_RATE / 2, token)
+                val track = if (r != null && r.title.isNotBlank()) runCatching { Lrclib.find(r.artist, r.title) }.getOrNull() else null
+                r to track
+            }
+            activity.runOnUiThread {
+                result.onFailure { e ->
+                    val msg = e.message ?: "Error al reconocer"
+                    if (msg.contains("consultas") || msg.contains("clave")) {
+                        // Sin consultas o clave mala: se apaga el automático para no insistir.
+                        if (b.switchAutoId.isChecked && netAuto) b.switchAutoId.isChecked = false
+                    } else scheduleNextNet(found = false)
+                    netFinish(msg, error = true, silent = false)
+                }
+                result.onSuccess { (r, track) ->
+                    if (r == null) {
+                        scheduleNextNet(found = false)
+                        netFinish("No se reconoció la canción. Prueba más cerca del altavoz.", error = true, silent = silent)
+                    } else {
+                        applyNetMatch(r, track, samples.size.toDouble() / (AudioEngine.SAMPLE_RATE / 2), endNs / 1e6, silent)
+                        scheduleNextNet(found = true)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun netFinish(msg: String, error: Boolean, silent: Boolean) {
+        identifying = false
+        b.btnIdentify.isEnabled = true
+        b.btnIdentify.setText(R.string.identify)
+        if (silent) {
+            liveMessage = if (error) "🌐 Escuchando…" else msg
+            b.tvIdStatus.text = "Automático: ${msg.take(80)}"
+            updateLiveChip()
+        } else {
+            idStatus(msg, error)
+            toastLong(msg)
+        }
+    }
+
+    private fun applyNetMatch(r: Audd.Result, track: Track?, sampleSec: Double, endMs: Double, silent: Boolean) {
+        val posAtEnd = r.timecodeSec + sampleSec
+        val key = "${r.artist}|${r.title}".lowercase()
+        val label = "${r.artist} — ${r.title}"
+        if (key == netKey && lyrics.title.isNotEmpty()) {
+            // Sigue la misma canción: solo corrige la sincronización si se desvió más de 1 s.
+            val now = LyricsEngine.nowMs()
+            if (abs(posAtEnd + (now - endMs) / 1000 - lyrics.position(now)) > 1.0) lyrics.resync(posAtEnd, endMs)
+            netFinish("✓ $label (sincronizada)", error = false, silent = silent)
+            return
+        }
+        netKey = key
+        netDuration = track?.duration ?: 0.0
+        currentSongId = null
+        lyrics.applyMatch(track ?: Track(r.artist, r.title), posAtEnd, endMs)
+        // Una canción grabada que suena: la letra tiene que avanzar sola.
+        if (lyrics.manual && lyrics.synced) setMode(live = false)
+        renderSetlist()
+        updatePrompt()
+        liveMessage = ""
+        val where = "en %d:%02d".format((posAtEnd / 60).toInt(), (posAtEnd % 60).toInt())
+        val lyr = when {
+            track == null -> "no encontré su letra (puedes buscarla abajo)"
+            lyrics.synced -> "letra sincronizada"
+            else -> "letra sin tiempos: pásala con ◀ ▶"
+        }
+        netFinish("✓ $label · $where · $lyr", error = false, silent = silent)
     }
 
     private fun applyMatch(m: SongLibrary.IdResult?, endMs: Double, silent: Boolean) {
