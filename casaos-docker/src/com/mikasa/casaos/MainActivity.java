@@ -59,6 +59,14 @@ public class MainActivity extends Activity {
         header.setGravity(Gravity.CENTER_HORIZONTAL);
         int p = Ui.dp(this, 16);
         header.setPadding(p, p / 2, p, 0);
+        Button disksBtn = new Button(this);
+        disksBtn.setText("Discos y archivos");
+        disksBtn.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_disk, 0, 0, 0);
+        disksBtn.setCompoundDrawablePadding(Ui.dp(this, 8));
+        disksBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openDisks(); }
+        });
+        header.addView(disksBtn, new LinearLayout.LayoutParams(-1, -2));
         spinner = new ProgressBar(this);
         header.addView(spinner, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
         status = new TextView(this);
@@ -105,8 +113,9 @@ public class MainActivity extends Activity {
     @Override public boolean onCreateOptionsMenu(Menu m) {
         MenuItem r = m.add(0, 1, 0, R.string.refresh);
         r.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-        m.add(0, 2, 1, R.string.open_dashboard);
-        m.add(0, 3, 2, R.string.settings);
+        m.add(0, 4, 1, "Discos y archivos");
+        m.add(0, 2, 2, R.string.open_dashboard);
+        m.add(0, 3, 3, R.string.settings);
         return true;
     }
 
@@ -114,6 +123,7 @@ public class MainActivity extends Activity {
         switch (item.getItemId()) {
             case 1: refresh(); return true;
             case 2: openDashboard(); return true;
+            case 4: openDisks(); return true;
             case 3: startActivityForResult(new Intent(this, SetupActivity.class), REQ_SETUP); return true;
         }
         return super.onOptionsItemSelected(item);
@@ -221,6 +231,10 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    private void openDisks() {
+        startActivity(new Intent(this, DisksActivity.class));
     }
 
     private void openDashboard() {
