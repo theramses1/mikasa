@@ -45,13 +45,21 @@ data class Targets(
     val manual: Boolean,
 )
 
-data class Macros(val kcal: Double, val p: Double, val c: Double, val f: Double, val sugar: Double = 0.0) {
-    operator fun plus(o: Macros) = Macros(kcal + o.kcal, p + o.p, c + o.c, f + o.f, sugar + o.sugar)
-    operator fun times(k: Double) = Macros(kcal * k, p * k, c * k, f * k, sugar * k)
+data class Macros(
+    val kcal: Double,
+    val p: Double,
+    val c: Double,
+    val f: Double,
+    val sugar: Double = 0.0,
+    val fiber: Double = 0.0,
+) {
+    operator fun plus(o: Macros) = Macros(kcal + o.kcal, p + o.p, c + o.c, f + o.f, sugar + o.sugar, fiber + o.fiber)
+    operator fun times(k: Double) = Macros(kcal * k, p * k, c * k, f * k, sugar * k, fiber * k)
 
     companion object {
         val ZERO = Macros(0.0, 0.0, 0.0, 0.0)
-        fun fromMacros(p: Double, c: Double, f: Double, sugar: Double = 0.0) = Macros(p * 4 + c * 4 + f * 9, p, c, f, sugar)
+        fun fromMacros(p: Double, c: Double, f: Double, sugar: Double = 0.0, fiber: Double = 0.0) =
+            Macros(p * 4 + c * 4 + f * 9, p, c, f, sugar, fiber)
     }
 }
 

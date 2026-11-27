@@ -67,8 +67,11 @@ class DietScreen(act: MainActivity) : Screen(act) {
                     stat(Fmt.n(avg { it.p }), "Proteína", size = 18f).weighted()
                     stat(Fmt.n(avg { it.c }), "Carbos", size = 18f).weighted()
                     stat(Fmt.n(avg { it.f }), "Grasa", size = 18f).weighted()
-                    stat(Fmt.n(avg { it.sugar }), "Azúcares", size = 18f).weighted()
                 }
+                row {
+                    stat(Fmt.n(avg { it.sugar }), "Azúcares (máx. ${data.sugarGoal()})", size = 18f).weighted()
+                    stat(Fmt.n(avg { it.fiber }), "Fibra (meta ${data.fiberGoal()})", size = 18f).weighted()
+                }.margins(top = 10)
             }
         }
     }
@@ -82,10 +85,10 @@ class DietScreen(act: MainActivity) : Screen(act) {
     }
 }
 
-/** Cantidad y macros de una entrada, p. ej. «250 ml · P 8 · C 12 · G 0 · Az 12». */
+/** Cantidad y macros de una entrada, p. ej. «250 ml · P 8 · C 12 · G 0 · Az 12 · Fi 0». */
 fun entryMeta(e: FoodEntry): String =
     (e.grams?.let { "${Fmt.n(it)} ${e.unit.symbol} · " } ?: "") +
-        "P ${Fmt.n(e.macros.p)} · C ${Fmt.n(e.macros.c)} · G ${Fmt.n(e.macros.f)} · Az ${Fmt.n(e.macros.sugar)}"
+        "P ${Fmt.n(e.macros.p)} · C ${Fmt.n(e.macros.c)} · G ${Fmt.n(e.macros.f)} · Az ${Fmt.n(e.macros.sugar)} · Fi ${Fmt.n(e.macros.fiber)}"
 
 private fun normalize(s: String) =
     Normalizer.normalize(s.lowercase(Fmt.locale), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
@@ -131,7 +134,7 @@ class FoodSearchScreen(act: MainActivity, private val date: LocalDate?, private 
                     listRow(
                         f.name + if (meal != null && recent.containsKey(f.id)) "  ·  reciente" else "",
                         "100 ${f.unit.symbol}: ${Fmt.n(f.per100.kcal)} kcal · P ${Fmt.n(f.per100.p, 1)} · C ${Fmt.n(f.per100.c, 1)} · " +
-                            "G ${Fmt.n(f.per100.f, 1)} · Az ${Fmt.n(f.per100.sugar, 1)}",
+                            "G ${Fmt.n(f.per100.f, 1)} · Az ${Fmt.n(f.per100.sugar, 1)} · Fi ${Fmt.n(f.per100.fiber, 1)}",
                         onEdit = if (meal != null) ({ act.push(FoodFormScreen(act, f, date, meal)) }) else null,
                         onDelete = if (f.builtin) null else ({
                             act.confirm("¿Eliminar «${f.name}» de tu lista? Los registros ya hechos se conservan.", "Eliminar") {
@@ -185,6 +188,7 @@ class FoodFormScreen(
             val f = r3.add(context.vertical(), width = 0, weight = 1f).field("Grasa (g)", Fmt.plain(m?.f, 2), InputKind.DECIMAL)
             r3.add(View(context), width = dp(10))
             val sugar = r3.add(context.vertical(), width = 0, weight = 1f).field("Azúcares (g)", Fmt.plain(m?.sugar, 2), InputKind.DECIMAL)
+            val fiber = field("Fibra (g)", Fmt.plain(m?.fiber, 2), InputKind.DECIMAL)
             val kcal = field("Calorías", kcalText, hint = "auto (4·P + 4·C + 9·G)", kind = InputKind.DECIMAL)
 
             val used = if (e != null) data.entriesOfFood(e.id).size else 0
@@ -206,12 +210,14 @@ class FoodFormScreen(
                 val fv = Fmt.parse(f.text) ?: 0.0
                 val sv = Fmt.parse(sugar.text) ?: 0.0
                 if (sv > cv && cv > 0) return@button act.toast("Los azúcares no pueden ser más que los carbohidratos.")
+                val fib = Fmt.parse(fiber.text) ?: 0.0
+                if (fib > cv && cv > 0) return@button act.toast("La fibra no puede ser más que los carbohidratos.")
                 val kv = Fmt.parse(kcal.text) ?: (pv * 4 + cv * 4 + fv * 9)
                 val g = Fmt.parse(servingG.text)
                 if (perServing && (g == null || g <= 0)) return@button act.toast("Indica el tamaño de la porción.")
                 val k = if (perServing) 100.0 / g!! else 1.0
                 val food = Food(
-                    e?.id ?: 0, n, Macros(kv * k, pv * k, cv * k, fv * k, sv * k), g?.takeIf { it > 0 } ?: 100.0,
+                    e?.id ?: 0, n, Macros(kv * k, pv * k, cv * k, fv * k, sv * k, fib * k), g?.takeIf { it > 0 } ?: 100.0,
                     servingName.text.toString().trim().ifEmpty { "porción" }, e?.builtin ?: false, unit,
                 )
                 if (e != null) {
@@ -239,7 +245,7 @@ fun quantityDialog(act: MainActivity, food: Food, date: LocalDate, meal: Meal, e
     fun grams(): Double = (Fmt.parse(amount.text) ?: 0.0) * if (unitServing) food.servingG else 1.0
     fun updatePreview() {
         val m = food.forGrams(grams())
-        preview.text = "${Fmt.n(m.kcal)} kcal  ·  P ${Fmt.n(m.p, 1)}  ·  C ${Fmt.n(m.c, 1)}  ·  G ${Fmt.n(m.f, 1)}  ·  Az ${Fmt.n(m.sugar, 1)}"
+        preview.text = "${Fmt.n(m.kcal)} kcal  ·  P ${Fmt.n(m.p, 1)}  ·  C ${Fmt.n(m.c, 1)}  ·  G ${Fmt.n(m.f, 1)}  ·  Az ${Fmt.n(m.sugar, 1)}  ·  Fi ${Fmt.n(m.fiber, 1)}"
     }
     val editFood = "Editar alimento" to { act.push(FoodFormScreen(act, food, date, entry?.meal ?: meal)) }
     act.formDialog(food.name, if (entry == null) "Añadir" else "Guardar", neutral = editFood, build = {
@@ -284,6 +290,7 @@ fun quickDialog(act: MainActivity, date: LocalDate, meal: Meal, entry: FoodEntry
     lateinit var c: android.widget.EditText
     lateinit var f: android.widget.EditText
     lateinit var sugar: android.widget.EditText
+    lateinit var fiber: android.widget.EditText
     lateinit var kcal: android.widget.EditText
     lateinit var mealSpinner: Spinner
     act.formDialog(if (entry == null) "Entrada rápida" else "Editar entrada", if (entry == null) "Añadir" else "Guardar", build = {
@@ -292,6 +299,7 @@ fun quickDialog(act: MainActivity, date: LocalDate, meal: Meal, entry: FoodEntry
         c = field("Carbos (g)", Fmt.plain(entry?.macros?.c), InputKind.DECIMAL)
         f = field("Grasa (g)", Fmt.plain(entry?.macros?.f), InputKind.DECIMAL)
         sugar = field("Azúcares (g)", Fmt.plain(entry?.macros?.sugar?.takeIf { it > 0 }), InputKind.DECIMAL)
+        fiber = field("Fibra (g)", Fmt.plain(entry?.macros?.fiber?.takeIf { it > 0 }), InputKind.DECIMAL)
         kcal = field("Calorías", entry?.macros?.kcal?.let { Fmt.plain(it, 0) } ?: "", InputKind.DECIMAL, hint = "auto")
         text("Comida", 13f, Pal.muted, bold = true).margins(bottom = 4)
         mealSpinner = add(Spinner(context).apply {
@@ -307,7 +315,7 @@ fun quickDialog(act: MainActivity, date: LocalDate, meal: Meal, entry: FoodEntry
         act.data.saveEntry(
             FoodEntry(
                 entry?.id ?: 0, date, Meal.values()[mealSpinner.selectedItemPosition], null,
-                name.text.toString().trim().ifEmpty { "Entrada rápida" }, null, Macros(kv, pv, cv, fv, Fmt.parse(sugar.text) ?: 0.0),
+                name.text.toString().trim().ifEmpty { "Entrada rápida" }, null, Macros(kv, pv, cv, fv, Fmt.parse(sugar.text) ?: 0.0, Fmt.parse(fiber.text) ?: 0.0),
             ),
         )
         onDone()

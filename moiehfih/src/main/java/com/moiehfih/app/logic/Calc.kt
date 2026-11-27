@@ -141,6 +141,9 @@ object Calc {
     /** Límite orientativo de azúcares: 10 % de las calorías del día (recomendación de la OMS). */
     fun sugarLimitG(kcal: Int): Int = (kcal * 0.10 / 4).roundToInt()
 
+    /** Meta orientativa de fibra: 14 g por cada 1,000 kcal (Guías Alimentarias de EE. UU.). */
+    fun fiberGoalG(kcal: Int): Int = (kcal * 14 / 1000.0).roundToInt()
+
     /** Calorías de una sesión de cardio con MET × peso × horas. */
     fun cardioKcal(met: Double, weightKg: Double, minutes: Int): Double = met * weightKg * minutes / 60.0
 

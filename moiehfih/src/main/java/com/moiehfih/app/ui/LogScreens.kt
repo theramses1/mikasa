@@ -147,7 +147,8 @@ class JournalScreen(act: MainActivity) : Screen(act) {
             val cardio = data.cardio.filter { it.date == date }
             listRow("Cardio", trailing = if (cardio.isEmpty()) "—" else cardio.joinToString(", ") { "${it.type.label} ${it.minutes} min" })
             listRow("Agua", trailing = "${Fmt.n(data.waterTotal(date))} / ${Fmt.n(data.waterGoal())} ml")
-            listRow("Azúcares", trailing = if (logged) "${Fmt.n(tot.sugar)} g" else "—")
+            listRow("Azúcares", trailing = if (logged) "${Fmt.n(tot.sugar)} / ${data.sugarGoal()} g máx." else "—")
+            listRow("Fibra", trailing = if (logged) "${Fmt.n(tot.fiber)} / ${data.fiberGoal()} g" else "—")
             data.health[date]?.let { h ->
                 listRow(
                     "Reloj / Health Connect",

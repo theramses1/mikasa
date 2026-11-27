@@ -135,4 +135,21 @@ class CalcTest {
         assertEquals(57, Calc.sugarLimitG(2280))
         assertEquals(392.0, Calc.cardioKcal(9.8, 80.0, 30), 1e-9)
     }
+
+    @Test
+    fun fiberGoalAndSeedFoods() {
+        assertEquals(31, Calc.fiberGoalG(2230))
+        val names = com.moiehfih.app.data.Seed.foods.map { it.name }
+        assertEquals("nombres repetidos", names.size, names.toSet().size)
+        for (f in com.moiehfih.app.data.Seed.foods) {
+            val m = f.per100
+            assertTrue("${f.name}: azúcar > carbos", m.sugar <= m.c + 1e-9)
+            assertTrue("${f.name}: fibra > carbos", m.fiber <= m.c + 1e-9)
+            // Las kcal declaradas deben parecerse a las de los macros (la fibra aporta ~2 kcal/g; ±30 % por
+            // redondeos y factores propios de cada alimento en las tablas oficiales).
+            val fromMacros = m.p * 4 + (m.c - m.fiber) * 4 + m.fiber * 2 + m.f * 9
+            if (fromMacros > 20) assertTrue("${f.name}: kcal ${m.kcal} vs $fromMacros", kotlin.math.abs(m.kcal - fromMacros) / fromMacros < 0.30)
+        }
+        assertTrue(names.containsAll(listOf("Gordita de chicharrón prensado", "Enchiladas verdes con pollo", "Chile jalapeño", "Pozole rojo de cerdo")))
+    }
 }

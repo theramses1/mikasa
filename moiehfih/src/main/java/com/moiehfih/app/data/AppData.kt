@@ -43,6 +43,11 @@ class AppData private constructor(context: Context) {
     /** Meta de agua elegida por el usuario (ml); null = automática según el peso. */
     var waterGoalOverride: Int? = null
         private set
+    /** Límite de azúcar y meta de fibra elegidos por el usuario (g); null = automáticos según las calorías. */
+    var sugarGoalOverride: Int? = null
+        private set
+    var fiberGoalOverride: Int? = null
+        private set
     /** Health Connect: si el usuario lo conectó y cuándo se sincronizó por última vez (epoch ms). */
     var healthConnected = false
         private set
@@ -171,6 +176,22 @@ class AppData private constructor(context: Context) {
         changed()
     }
 
+    fun setSugarGoal(g: Int?) {
+        sugarGoalOverride = g
+        putKv("sugarGoal", JSONObject().put("v", g ?: JSONObject.NULL))
+        changed()
+    }
+
+    fun setFiberGoal(g: Int?) {
+        fiberGoalOverride = g
+        putKv("fiberGoal", JSONObject().put("v", g ?: JSONObject.NULL))
+        changed()
+    }
+
+    fun sugarGoal(): Int = sugarGoalOverride ?: Calc.sugarLimitG(currentTargets().kcal)
+
+    fun fiberGoal(): Int = fiberGoalOverride ?: Calc.fiberGoalG(currentTargets().kcal)
+
     fun setHealthState(connected: Boolean, lastSync: Long?) {
         healthConnected = connected
         healthLastSync = lastSync
@@ -229,7 +250,7 @@ class AppData private constructor(context: Context) {
         val values = ContentValues().apply {
             put("date", e.date.toString()); put("meal", e.meal.name); put("food_id", e.foodId); put("name", e.name)
             put("grams", e.grams); put("kcal", e.macros.kcal); put("p", e.macros.p); put("c", e.macros.c); put("f", e.macros.f)
-            put("sugar", e.macros.sugar); put("unit", e.unit.name)
+            put("sugar", e.macros.sugar); put("fiber", e.macros.fiber); put("unit", e.unit.name)
         }
         val saved = if (e.id > 0) {
             db.update("food_entries", values, "id=?", arrayOf("${e.id}"))
@@ -438,7 +459,7 @@ class AppData private constructor(context: Context) {
     // ---------- Copia de seguridad ----------
 
     fun exportJson(): String {
-        val root = JSONObject().put("app", "MoiehFih").put("version", 2)
+        val root = JSONObject().put("app", "MoiehFih").put("version", Helper.VERSION)
         for (table in Helper.TABLES) {
             val rows = JSONArray()
             db.rawQuery("SELECT * FROM $table", null).use { c ->
@@ -485,8 +506,9 @@ class AppData private constructor(context: Context) {
                     db.insertOrThrow(table, null, values)
                 }
             }
-            // Copias de la versión 1: completar azúcares y unidades.
-            if (root.optInt("version", 1) < 2) Helper.migrateDataTo2(db)
+            // Copias de versiones anteriores: completar azúcares, fibra, unidades y alimentos nuevos.
+            val from = root.optInt("version", 1)
+            if (from < Helper.VERSION) Helper.syncSeedData(db, recomputeSugar = from < 2)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -525,7 +547,8 @@ class AppData private constructor(context: Context) {
 
     private fun loadAll() {
         profile = null; goal = Goal(); targets = null; restSeconds = 120
-        waterGoalOverride = null; healthConnected = false; healthLastSync = null
+        waterGoalOverride = null; sugarGoalOverride = null; fiberGoalOverride = null
+        healthConnected = false; healthLastSync = null
         water.clear(); cardio.clear(); health.clear()
         foods.clear(); entries.clear(); weights.clear(); exercises.clear()
         routines.clear(); workouts.clear(); journal.clear(); checkins.clear()
@@ -546,23 +569,26 @@ class AppData private constructor(context: Context) {
                 )
                 "restSeconds" -> restSeconds = o.getInt("v")
                 "waterGoal" -> waterGoalOverride = if (o.isNull("v")) null else o.getInt("v")
+                "sugarGoal" -> sugarGoalOverride = if (o.isNull("v")) null else o.getInt("v")
+                "fiberGoal" -> fiberGoalOverride = if (o.isNull("v")) null else o.getInt("v")
                 "health" -> {
                     healthConnected = o.optBoolean("connected")
                     healthLastSync = if (o.isNull("lastSync")) null else o.getLong("lastSync")
                 }
             }
         }
-        query("SELECT id, name, kcal, p, c, f, serving_g, serving_name, builtin, sugar, unit FROM foods WHERE deleted=0 ORDER BY name") { c ->
+        query("SELECT id, name, kcal, p, c, f, serving_g, serving_name, builtin, sugar, unit, fiber FROM foods WHERE deleted=0 ORDER BY name") { c ->
             foods += Food(
-                c.getLong(0), c.getString(1), Macros(c.getDouble(2), c.getDouble(3), c.getDouble(4), c.getDouble(5), c.getDouble(9)),
+                c.getLong(0), c.getString(1),
+                Macros(c.getDouble(2), c.getDouble(3), c.getDouble(4), c.getDouble(5), c.getDouble(9), c.getDouble(11)),
                 c.getDouble(6), c.getString(7), c.getInt(8) == 1, unitOf(c.getString(10)),
             )
         }
-        query("SELECT id, date, meal, food_id, name, grams, kcal, p, c, f, sugar, unit FROM food_entries ORDER BY id") { c ->
+        query("SELECT id, date, meal, food_id, name, grams, kcal, p, c, f, sugar, unit, fiber FROM food_entries ORDER BY id") { c ->
             val e = FoodEntry(
                 c.getLong(0), LocalDate.parse(c.getString(1)), Meal.valueOf(c.getString(2)),
                 if (c.isNull(3)) null else c.getLong(3), c.getString(4), if (c.isNull(5)) null else c.getDouble(5),
-                Macros(c.getDouble(6), c.getDouble(7), c.getDouble(8), c.getDouble(9), c.getDouble(10)), unitOf(c.getString(11)),
+                Macros(c.getDouble(6), c.getDouble(7), c.getDouble(8), c.getDouble(9), c.getDouble(10), c.getDouble(12)), unitOf(c.getString(11)),
             )
             entries.getOrPut(e.date) { ArrayList() } += e
         }
@@ -653,8 +679,10 @@ class AppData private constructor(context: Context) {
 
     private fun foodValues(f: Food) = Helper.foodValues(f)
 
-    private class Helper(context: Context) : SQLiteOpenHelper(context, "moiehfih.db", null, 2) {
+    private class Helper(context: Context) : SQLiteOpenHelper(context, "moiehfih.db", null, VERSION) {
         companion object {
+            const val VERSION = 3
+
             val TABLES = listOf(
                 "kv", "foods", "food_entries", "weights", "exercises", "routines", "workouts", "journal", "checkins",
                 "water", "cardio", "health_days",
@@ -662,7 +690,7 @@ class AppData private constructor(context: Context) {
 
             fun foodValues(f: Food) = ContentValues().apply {
                 put("name", f.name); put("kcal", f.per100.kcal); put("p", f.per100.p); put("c", f.per100.c); put("f", f.per100.f)
-                put("sugar", f.per100.sugar); put("unit", f.unit.name)
+                put("sugar", f.per100.sugar); put("fiber", f.per100.fiber); put("unit", f.unit.name)
                 put("serving_g", f.servingG); put("serving_name", f.servingName); put("builtin", if (f.builtin) 1 else 0)
             }
 
@@ -732,20 +760,33 @@ class AppData private constructor(context: Context) {
                 )
             }
 
-            /** Al actualizar desde la v1: completa azúcares/unidades de los alimentos base y de lo ya registrado. */
-            fun migrateDataTo2(db: SQLiteDatabase) {
+            /** Versión 3: fibra. */
+            private fun upgradeTo3(db: SQLiteDatabase) {
+                db.execSQL("ALTER TABLE foods ADD COLUMN fiber REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE food_entries ADD COLUMN fiber REAL NOT NULL DEFAULT 0")
+            }
+
+            /**
+             * Al actualizar la app o importar una copia antigua: completa azúcares, fibra y unidades de
+             * los alimentos base, añade los alimentos nuevos de la lista y recalcula lo ya registrado.
+             */
+            fun syncSeedData(db: SQLiteDatabase, recomputeSugar: Boolean) {
                 for (f in Seed.foods) {
                     val updated = db.update(
                         "foods",
-                        ContentValues().apply { put("sugar", f.per100.sugar); put("unit", f.unit.name) },
+                        ContentValues().apply { put("sugar", f.per100.sugar); put("fiber", f.per100.fiber); put("unit", f.unit.name) },
                         "builtin=1 AND name=?", arrayOf(f.name),
                     )
-                    if (updated == 0) db.insert("foods", null, foodValues(f))
+                    if (updated > 0) continue
+                    // No duplicar si el usuario ya tiene uno propio con ese nombre.
+                    val exists = db.rawQuery("SELECT 1 FROM foods WHERE name=? AND deleted=0", arrayOf(f.name)).use { it.moveToFirst() }
+                    if (!exists) db.insert("foods", null, foodValues(f))
                 }
+                val fromFood = { col: String -> "COALESCE((SELECT foods.$col FROM foods WHERE foods.id = food_entries.food_id), 0) * grams / 100" }
                 db.execSQL(
-                    "UPDATE food_entries SET " +
-                        "sugar = COALESCE((SELECT foods.sugar FROM foods WHERE foods.id = food_entries.food_id), 0) * grams / 100, " +
-                        "unit = COALESCE((SELECT foods.unit FROM foods WHERE foods.id = food_entries.food_id), 'G') " +
+                    "UPDATE food_entries SET fiber = ${fromFood("fiber")}" +
+                        (if (recomputeSugar) ", sugar = ${fromFood("sugar")}" else "") +
+                        ", unit = COALESCE((SELECT foods.unit FROM foods WHERE foods.id = food_entries.food_id), unit) " +
                         "WHERE food_id IS NOT NULL AND grams IS NOT NULL",
                 )
             }
@@ -754,14 +795,15 @@ class AppData private constructor(context: Context) {
         override fun onCreate(db: SQLiteDatabase) {
             createV1(db)
             upgradeTo2(db)
+            upgradeTo3(db)
             seed(db)
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            if (oldVersion < 2) {
-                upgradeTo2(db)
-                migrateDataTo2(db)
-            }
+            // Primero el esquema completo, después los datos (que ya usan todas las columnas).
+            if (oldVersion < 2) upgradeTo2(db)
+            if (oldVersion < 3) upgradeTo3(db)
+            syncSeedData(db, recomputeSugar = oldVersion < 2)
         }
     }
 }

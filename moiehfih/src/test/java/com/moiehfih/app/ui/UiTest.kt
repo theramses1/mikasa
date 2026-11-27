@@ -342,12 +342,12 @@ class UiTest {
         val milk = list.first { it.name == "Leche descremada" }
         assertEquals(FoodUnit.ML, milk.unit)
         assertEquals(240.0, milk.grams!!, 1e-9)
-        assertEquals(5.1 * 2.4, milk.macros.sugar, 1e-9)
+        assertEquals(5.0 * 2.4, milk.macros.sugar, 1e-9)
         assertEquals(12.2 * 1.18, list.first { it.name == "Plátano" }.macros.sugar, 1e-9)
         assertTrue(act.has("240 ml · "))
         assertTrue(act.has("118 g · "))
         assertTrue(act.has("Azúcares (máx.)"))
-        assertEquals(5.1 * 2.4 + 12.2 * 1.18, data.dayTotals(today).sugar, 1e-9)
+        assertEquals(5.0 * 2.4 + 12.2 * 1.18, data.dayTotals(today).sugar, 1e-9)
     }
 
     @Test
@@ -443,7 +443,7 @@ class UiTest {
         data = AppData.get(app)
         val e = data.entries[today]!!.single()
         assertEquals(FoodUnit.ML, e.unit)
-        assertEquals(5.1 * 2, e.macros.sugar, 1e-9)
+        assertEquals(5.0 * 2, e.macros.sugar, 1e-9)
         assertEquals(81.5, data.weights[today]!!, 1e-9)
         assertTrue(data.foods.any { it.name == "Jugo de naranja" && it.unit == FoodUnit.ML })
         assertEquals(1, data.foods.count { it.name == "Leche descremada" })
@@ -592,5 +592,103 @@ class UiTest {
         act.all().filterIsInstance<EditText>()[1].setText("100")
         act.click("Cancelar")
         assertEquals(60.0, data.finishedWorkouts().single().exercises.single().sets[0].weight!!, 1e-9)
+    }
+
+    @Test
+    fun fiberIsTrackedAndGoalsAreEditable() {
+        setupProfile()
+        addAvena(40.0)
+        assertEquals(10.6 * 0.4, data.dayTotals(today).fiber, 1e-9)
+        val act = launch()
+        assertTrue(act.has("Fibra (meta)"))
+        val auto = data.sugarGoal()
+        act.push(SettingsScreen(act))
+        idle()
+        act.field("Límite de azúcar (g/día)").setText("30")
+        act.field("Meta de fibra (g/día)").setText("35")
+        act.view("Azúcar y fibra").let { title ->
+            // El botón «Guardar» de esta tarjeta es el último hijo de la tarjeta.
+            val card = title.parent as LinearLayout
+            card.getChildAt(card.childCount - 1).performClick()
+        }
+        idle()
+        assertEquals(30, data.sugarGoal())
+        assertEquals(35, data.fiberGoal())
+        act.onBackPressed()
+        idle()
+        assertTrue(act.has("4 / 35 g")) // fibra de hoy frente a la meta
+        // Vaciar los campos vuelve al cálculo automático.
+        data.setSugarGoal(null)
+        assertEquals(auto, data.sugarGoal())
+    }
+
+    @Test
+    fun mexicanFoodsAreSearchable() {
+        setupProfile()
+        val act = launch()
+        act.push(FoodSearchScreen(act, today, Meal.COMIDA))
+        idle()
+        val search = act.all().filterIsInstance<EditText>().single()
+        search.setText("enchil")
+        idle()
+        for (n in listOf("Enchiladas rojas con pollo", "Enchiladas verdes con pollo", "Enchiladas suizas")) assertTrue(n, act.has(n))
+        search.setText("gordita")
+        idle()
+        assertTrue(act.has("Gordita de chicharrón prensado"))
+        act.clickRow("Gordita de chicharrón prensado")
+        dialogPositive() // 1 pieza = 120 g
+        val e = data.entries[today]!!.single()
+        assertEquals(360.0, e.macros.kcal, 1e-6)
+        assertEquals(3.6, e.macros.fiber, 1e-9)
+        // Al añadir, vuelve a la pantalla anterior (Inicio); en una búsqueda nueva aparecen los chiles.
+        assertTrue(act.has("Gasto energético"))
+        act.push(FoodSearchScreen(act, today, Meal.COMIDA))
+        idle()
+        act.all().filterIsInstance<EditText>().single().setText("chile")
+        idle()
+        assertTrue(act.has("Chile jalapeño"))
+        assertTrue(act.has("Chile relleno capeado (queso)"))
+    }
+
+    @Test
+    fun upgradesVersion2DatabaseWithFiber() {
+        AppData.resetForTests()
+        val app = RuntimeEnvironment.getApplication()
+        val file = app.getDatabasePath("moiehfih.db")
+        app.deleteDatabase("moiehfih.db")
+        file.parentFile!!.mkdirs()
+        val old = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(file, null)
+        for (sql in listOf(
+            "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            "CREATE TABLE foods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, kcal REAL, p REAL, c REAL, f REAL, serving_g REAL, serving_name TEXT, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0, sugar REAL NOT NULL DEFAULT 0, unit TEXT NOT NULL DEFAULT 'G')",
+            "CREATE TABLE food_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal TEXT NOT NULL, food_id INTEGER, name TEXT NOT NULL, grams REAL, kcal REAL, p REAL, c REAL, f REAL, sugar REAL NOT NULL DEFAULT 0, unit TEXT NOT NULL DEFAULT 'G')",
+            "CREATE TABLE weights (date TEXT PRIMARY KEY, kg REAL NOT NULL)",
+            "CREATE TABLE exercises (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, muscle TEXT, rep_min INTEGER, rep_max INTEGER, increment REAL, builtin INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0)",
+            "CREATE TABLE routines (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, exercise_ids TEXT NOT NULL)",
+            "CREATE TABLE workouts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, name TEXT NOT NULL, start INTEGER NOT NULL, end_time INTEGER, notes TEXT, data TEXT NOT NULL)",
+            "CREATE TABLE journal (date TEXT PRIMARY KEY, sleep_h REAL, sleep_q INTEGER, energy INTEGER, mood INTEGER, hunger INTEGER, stress INTEGER, steps INTEGER, notes TEXT)",
+            "CREATE TABLE checkins (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, tdee INTEGER, weight REAL, kcal INTEGER, p INTEGER, c INTEGER, f INTEGER)",
+            "CREATE TABLE water (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, ml INTEGER NOT NULL, time INTEGER NOT NULL)",
+            "CREATE TABLE cardio (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, type TEXT NOT NULL, minutes INTEGER NOT NULL, distance_km REAL, kcal REAL, avg_hr INTEGER, notes TEXT, external_id TEXT UNIQUE)",
+            "CREATE TABLE health_days (date TEXT PRIMARY KEY, steps INTEGER, active_kcal REAL, distance_m REAL, hr_avg INTEGER, hr_min INTEGER, hr_max INTEGER, resting_hr INTEGER, sleep_min INTEGER, spo2 REAL, bp_sys REAL, bp_dia REAL, weight REAL)",
+            "INSERT INTO foods (id, name, kcal, p, c, f, serving_g, serving_name, builtin, sugar) VALUES (1, 'Avena en hojuelas', 389, 16.9, 66, 6.9, 40, 'media taza', 1, 1)",
+            "INSERT INTO foods (id, name, kcal, p, c, f, serving_g, serving_name, builtin, sugar) VALUES (2, 'Mi licuado', 120, 10, 15, 2, 300, 'vaso', 0, 9)",
+            "INSERT INTO food_entries (date, meal, food_id, name, grams, kcal, p, c, f, sugar) VALUES ('$today', 'DESAYUNO', 1, 'Avena en hojuelas', 50, 194.5, 8.45, 33, 3.45, 0.5)",
+            "INSERT INTO food_entries (date, meal, food_id, name, grams, kcal, p, c, f, sugar) VALUES ('$today', 'SNACKS', 2, 'Mi licuado', 300, 360, 30, 45, 6, 27)",
+            "INSERT INTO water (date, ml, time) VALUES ('$today', 500, 1)",
+        )) old.execSQL(sql)
+        old.version = 2
+        old.close()
+
+        data = AppData.get(app)
+        val list = data.entries[today]!!
+        assertEquals(10.6 * 0.5, list.first { it.name == "Avena en hojuelas" }.macros.fiber, 1e-9)
+        val shake = list.first { it.name == "Mi licuado" }
+        assertEquals(0.0, shake.macros.fiber, 1e-9)
+        assertEquals(27.0, shake.macros.sugar, 1e-9) // el azúcar ya registrado no se toca
+        assertEquals(500, data.waterTotal(today))
+        assertTrue(data.foods.any { it.name == "Enchiladas verdes con pollo" })
+        assertEquals(1, data.foods.count { it.name == "Avena en hojuelas" })
+        assertTrue(data.foods.any { it.name == "Mi licuado" })
     }
 }

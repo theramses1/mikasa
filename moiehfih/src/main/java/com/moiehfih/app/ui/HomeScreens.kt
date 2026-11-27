@@ -35,7 +35,8 @@ fun LinearLayout.dayCard(act: MainActivity, date: LocalDate, title: String) {
             right.macroBar("Proteína", Pal.protein, tot.p, tg.p)
             right.macroBar("Carbos", Pal.carbs, tot.c, tg.c)
             right.macroBar("Grasa", Pal.fat, tot.f, tg.f)
-            right.macroBar("Azúcares (máx.)", Pal.sugar, tot.sugar, Calc.sugarLimitG(tg.kcal))
+            right.macroBar("Azúcares (máx.)", Pal.sugar, tot.sugar, act.data.sugarGoal())
+            right.macroBar("Fibra (meta)", Pal.fiber, tot.fiber, act.data.fiberGoal(), overIsBad = false)
         }
     }
 }
@@ -396,6 +397,36 @@ class SettingsScreen(act: MainActivity) : Screen(act) {
                 if (text.isNotEmpty() && (ml == null || ml !in 500..8000)) return@button act.toast("Indica entre 500 y 8,000 ml.")
                 data.setWaterGoal(if (text.isEmpty()) null else ml)
                 act.toast("Meta de agua: ${Fmt.n(data.waterGoal())} ml")
+                act.refresh()
+            }.margins(top = 8)
+        }
+
+        root.card {
+            h2("Azúcar y fibra").margins(bottom = 8)
+            val r = row {}
+            val sugar = r.add(context.vertical(), width = 0, weight = 1f)
+                .field("Límite de azúcar (g/día)", data.sugarGoalOverride?.toString() ?: "", InputKind.INT, "auto: ${Calc.sugarLimitG(tg.kcal)}")
+            r.add(android.view.View(context), width = dp(10))
+            val fiber = r.add(context.vertical(), width = 0, weight = 1f)
+                .field("Meta de fibra (g/día)", data.fiberGoalOverride?.toString() ?: "", InputKind.INT, "auto: ${Calc.fiberGoalG(tg.kcal)}")
+            muted(
+                "Vacíos se calculan con tus calorías: azúcar máx. 10 % de las kcal (OMS) y fibra 14 g por cada 1,000 kcal.",
+                12f,
+            )
+            button("Guardar") {
+                fun read(e: android.widget.EditText, range: IntRange): Pair<Boolean, Int?> {
+                    val t = e.text.toString().trim()
+                    if (t.isEmpty()) return true to null
+                    val v = Fmt.parse(t)?.toInt()
+                    return (v != null && v in range) to v
+                }
+                val (okS, s) = read(sugar, 5..300)
+                val (okF, f) = read(fiber, 5..150)
+                if (!okS) return@button act.toast("El límite de azúcar debe estar entre 5 y 300 g.")
+                if (!okF) return@button act.toast("La meta de fibra debe estar entre 5 y 150 g.")
+                data.setSugarGoal(s)
+                data.setFiberGoal(f)
+                act.toast("Azúcar máx. ${data.sugarGoal()} g · Fibra ${data.fiberGoal()} g")
                 act.refresh()
             }.margins(top = 8)
         }

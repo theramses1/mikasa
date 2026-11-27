@@ -43,6 +43,7 @@ object Pal {
     val carbs get() = c(0xFF2F9BE0, 0xFF4FB3F6)
     val fat get() = c(0xFFE6A817, 0xFFF5C542)
     val sugar get() = c(0xFFD9467A, 0xFFFF77A8)
+    val fiber get() = c(0xFF5E8C31, 0xFF9CCC65)
     val water get() = c(0xFF1E9BD7, 0xFF4FC3F7)
     val scale get() = c(0xFF9AA3B2, 0xFF5D6573)
     val onAccent = 0xFFFFFFFF.toInt()
@@ -401,12 +402,12 @@ fun ViewGroup.statCards(vararg items: Triple<String, String, Int>) {
     }
 }
 
-fun ViewGroup.macroBar(label: String, color: Int, value: Double, target: Int, unit: String = "g") {
+fun ViewGroup.macroBar(label: String, color: Int, value: Double, target: Int, unit: String = "g", overIsBad: Boolean = true) {
     val ctx = context
     val top = row {}
     top.margins(top = 8, bottom = 4)
     top.add(View(ctx).apply { background = rounded(color, ctx.dp(4).toFloat()) }, width = ctx.dp(8), height = ctx.dp(8)).margins(end = 6)
     top.text(label, 13f).weighted()
     top.text("${Fmt.n(value)} / ${Fmt.n(target)} $unit", 13f, bold = true)
-    add(ProgressBarView(ctx, if (target > 0) value / target else 0.0, color), height = ctx.dp(8))
+    add(ProgressBarView(ctx, if (target > 0) value / target else 0.0, color, overIsBad), height = ctx.dp(8))
 }
