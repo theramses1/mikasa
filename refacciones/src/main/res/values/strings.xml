@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mis Refacciones</string>
+    <string name="home_url">https://www.autozone.com.mx/</string>
+    <string name="no_vehicle">Sin vehículo seleccionado · toca para elegir</string>
+</resources>

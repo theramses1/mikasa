@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/action_search" android:title="Buscar refacción"
+        android:icon="@android:drawable/ic_menu_search" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_home" android:title="Inicio"
+        android:icon="@android:drawable/ic_menu_revert" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_vehicles" android:title="Mis vehículos" />
+    <item android:id="@+id/action_favorites" android:title="Favoritos" />
+    <item android:id="@+id/action_add_favorite" android:title="Agregar página a favoritos" />
+    <item android:id="@+id/action_share" android:title="Compartir página" />
+    <item android:id="@+id/action_settings" android:title="Preferencias" />
+</menu>
